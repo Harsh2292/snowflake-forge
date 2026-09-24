@@ -1,0 +1,11 @@
+-- ============================================================
+-- 01_database.sql — Database, schemas, and warehouse setup
+-- Owner: CoCo
+-- Run: First
+-- ============================================================
+
+-- TODO: CoCo will populate this file
+-- Expected objects:
+--   DATABASE: SUPPLY_CHAIN_FORGE
+--   SCHEMAS:  RAW, GOVERNED, SEMANTIC
+--   WAREHOUSE: FORGE_WH (X-Small, auto-suspend 60s)

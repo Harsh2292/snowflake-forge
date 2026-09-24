@@ -1,0 +1,11 @@
+-- ============================================================
+-- inventory.sql — Plant inventory levels
+-- Owner: CoCo
+-- Schema: SUPPLY_CHAIN_FORGE.RAW
+-- ============================================================
+
+-- TODO: CoCo will populate this file
+-- Entity: INVENTORY
+-- Key columns: inventory_id, plant_id, part_id, quantity_on_hand,
+--              quantity_reserved, reorder_point, daily_usage,
+--              last_replenished_date, snapshot_date

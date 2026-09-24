@@ -1,0 +1,11 @@
+# Verified Query Representations for Canonical Metrics
+# Owner: CoCo (built via agent-studio skill)
+# These ensure the Cortex Agent answers metric questions with exact formulas
+
+# TODO: CoCo will build this using agent-studio
+# VQRs for:
+#   1. "What is the on-time delivery rate?" → OTD formula
+#   2. "What is the fill rate?" → Fill Rate formula
+#   3. "What are the days of inventory?" → DOI formula
+#   4. "What is the landed cost?" → Landed Cost formula
+#   5. Variants: by region, by supplier, by product category, by time period

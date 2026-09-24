@@ -1,0 +1,33 @@
+# Supply Chain Semantic View
+# Owner: CoCo (built via agent-studio skill)
+# Deploy to: SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+
+# TODO: CoCo will build this using the agent-studio skill
+# This file will contain:
+#   - Entity definitions (suppliers, parts, plants, shipments, orders, customers, inventory)
+#   - Relationships between entities
+#   - Canonical metric definitions (OTD, Fill Rate, DOI, Landed Cost)
+#   - Time dimensions (order_date, ship_date, delivery_date)
+#   - Filters (by region, supplier tier, product category, priority)
+#   - Verified query representations (VQRs)
+
+# Skeleton structure (agent-studio will generate the full YAML):
+#
+# name: SUPPLY_CHAIN_SV
+# tables:
+#   - name: SUPPLIERS
+#     base_table: SUPPLY_CHAIN_FORGE.RAW.SUPPLIERS
+#     ...
+#   - name: PARTS
+#     base_table: SUPPLY_CHAIN_FORGE.RAW.PARTS
+#     ...
+# relationships:
+#   - left_table: ORDERS
+#     right_table: CUSTOMERS
+#     ...
+# metrics:
+#   - name: on_time_delivery_rate
+#     expression: COUNT_IF(actual_delivery_date <= promised_delivery_date) / COUNT(*)
+#   - name: fill_rate
+#     expression: SUM(quantity_shipped) / SUM(quantity_ordered)
+#   ...

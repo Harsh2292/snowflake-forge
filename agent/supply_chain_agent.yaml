@@ -1,0 +1,10 @@
+# Supply Chain Cortex Agent
+# Owner: CoCo (built via agent-studio skill)
+# Deploy to: SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_AGENT
+
+# TODO: CoCo will build and deploy this using agent-studio
+# The agent will:
+#   - Use the SUPPLY_CHAIN_SV semantic view as its data source
+#   - Answer natural language questions grounded in governed metric definitions
+#   - Respect persona role access policies
+#   - Support questions across all supply chain domains

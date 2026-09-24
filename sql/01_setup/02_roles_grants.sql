@@ -1,0 +1,12 @@
+-- ============================================================
+-- 02_roles_grants.sql — Persona roles and grants
+-- Owner: CoCo
+-- Run: After 01_database.sql
+-- ============================================================
+
+-- TODO: CoCo will populate this file
+-- Expected roles:
+--   FORGE_ADMIN — Full access, owns all objects
+--   PLANNER_ROLE — Inventory, orders, demand (no supplier costs)
+--   BUYER_ROLE — Suppliers, costs, POs (no customer PII)
+--   LOGISTICS_ROLE — Shipments, delivery, carriers (no supplier financials)

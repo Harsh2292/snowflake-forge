@@ -1,0 +1,11 @@
+-- ============================================================
+-- shipments.sql — Shipment tracking
+-- Owner: CoCo
+-- Schema: SUPPLY_CHAIN_FORGE.RAW
+-- ============================================================
+
+-- TODO: CoCo will populate this file
+-- Entity: SHIPMENTS
+-- Key columns: shipment_id, order_id, plant_id, carrier, ship_date,
+--              actual_delivery_date, freight_cost, duty_cost,
+--              handling_cost, shipment_status, tracking_number

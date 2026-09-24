@@ -1,0 +1,12 @@
+-- ============================================================
+-- dmf_checks.sql — Data metric functions for quality monitoring
+-- Owner: CoCo
+-- Schema: SUPPLY_CHAIN_FORGE.GOVERNED
+-- ============================================================
+
+-- TODO: CoCo will populate using data-quality skill
+-- Checks:
+--   NULL_CHECK — Critical columns must not be null
+--   REFERENTIAL_INTEGRITY — FK relationships hold
+--   FRESHNESS — Data updated within expected window
+--   RANGE_CHECK — Metrics fall within valid ranges

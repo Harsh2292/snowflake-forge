@@ -23,3 +23,8 @@ credentials.json
 
 # Snowflake
 snowflake_temp/
+
+# Claude Code (local-only, not pushed)
+CLAUDE.md
+.claude/
+.claudeignore

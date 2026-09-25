@@ -1,0 +1,34 @@
+<script>
+const D = DATA;
+
+function row(c, last) {
+  const mark = c.status === 'INFO' ? icon('info', 24, 'var(--muted)')
+    : icon(c.status === 'PASS' ? 'check' : 'cross', 24, c.status === 'PASS' ? 'var(--good)' : 'var(--critical)');
+  const word = c.status === 'INFO' ? 'For information' : c.status === 'PASS' ? 'Passing' : 'Failing';
+  return `<div style="display:grid;grid-template-columns:32px minmax(0,1fr) 240px 150px;align-items:center;gap:16px;padding:18px 0;${last ? '' : 'border-bottom:1px solid var(--line)'}">
+    ${mark}
+    <span class="stack" style="gap:3px"><span style="font-size:17px;font-weight:600">${esc(c.name)}</span><span class="small muted">${esc(c.tech)}</span></span>
+    <span class="ink2 num" style="font-size:15px">${esc(c.result)}</span>
+    <span style="font-size:15px;font-weight:600;text-align:right">${word}</span></div>`;
+}
+
+function render() {
+  if (!D.checks.length) {
+    return `<div class="root stack gap24"><header><h1 class="h1">Is the data healthy?</h1></header>
+      <div class="card row gap16">${icon('info', 24, 'var(--muted)')}<span style="font-size:16px">No results yet. The checks start reporting
+      once they are scheduled in Snowflake (build step B12). Nothing is wrong with the data.</span></div></div>`;
+  }
+  const ok = D.passing === D.scored;
+  return `<div class="root stack gap24">
+    <header><h1 class="h1">Is the data healthy?</h1>
+      <p class="lede">Snowflake checks the governed data automatically on a schedule, so a bad load is caught before it
+        reaches a chart or an answer. These are the latest results.</p></header>
+    <section class="banner">
+      <span class="row gap12" style="font-weight:600">${icon(ok ? 'check' : 'cross', 24, ok ? 'var(--good)' : 'var(--critical)')}${D.passing} of ${D.scored} checks passing</span>
+      <span class="small ink2" style="font-size:15px">Last checked ${esc(D.checked)}</span>
+    </section>
+    <section class="card" style="padding:6px 28px">${D.checks.map((c, i) => row(c, i === D.checks.length - 1)).join('')}</section>
+  </div>`;
+}
+mount(render, {});
+</script>

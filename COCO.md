@@ -1,13 +1,53 @@
 # COCO.md — CoCo Agent Entry Point
 
 > **Read this file at the start of every CoCo session.**
-> Then read `.agents/HANDOFF.md` for the latest project state.
+>
+> Then read, in this order:
+> 1. **`.agents/NEXT.md`** — names the exact task card to open. Start here.
+> 2. `docs/CONTRACT.md` — the frozen interface. Binding. Do not deviate.
+> 3. The task card named in `NEXT.md` — self-contained, has its own gate
+>
+> Reference when needed: `docs/HLD.md` (architecture), `docs/LLD.md` (exact schemas),
+> `docs/GAPS_RESOLVED.md` (resolved design questions), `docs/SESSION_LOG.md` (history).
+
+## How Work Is Organised
+
+Work is broken into **task cards** — one per build step, each executable in about one
+session, each carrying its own gate.
+
+```
+.agents/NEXT.md                 ← what to do right now
+.agents/tasks/coco/B01…B17.md   ← your cards
+.agents/tasks/claude/C01…C06.md ← Claude Code's cards
+```
+
+Execute one card at a time. A card is done when its **Gate** passes, not when the SQL
+runs. Then update `NEXT.md`, `HANDOFF.md`, and `SESSION_LOG.md` as the card instructs.
+
+**Task Card & Planning Rule**: When moving to the next task, first enter plan mode, plan the task, author the task card markdown file (`.agents/tasks/coco/Bxx_...md`), get user confirmation, and only then proceed with implementation.
+
+## The Contract Is Binding
+
+`docs/CONTRACT.md` is frozen at v1.1. Claude Code is building the entire application
+against it **in parallel, right now**, using a mock data layer. Every metric identifier,
+dimension identifier, governed view column name, role name, and FQN you create must
+match it exactly.
+
+If reality forces a deviation, append a Change Request to `CONTRACT.md` §11 and tell the
+user. **Never silently rename anything** — that is the one action that breaks the other
+agent's work irrecoverably.
+
+Build step **B13** is a full conformance audit against the contract. Do not skip it.
 
 ## Auto-Mode Rules
 
 - **Auto-mode is ON** — execute commands without asking for confirmation each time.
 - **DO NOT** create git commits, push, or create PRs automatically.
 - Everything else (SQL execution, file writes, deployments) — just do it.
+
+## Working Branch
+
+`development` — all dev happens here. Merge to `main` only after testing.
 
 ## Project: Supply Chain Forge
 
@@ -52,26 +92,45 @@ A governed "single source of truth" for supply chain data in Snowflake:
 
 ## Snowflake Connection
 
-- **Connection**: `tyduokn-gf25237`
+- **Connection**: `tyduokn-gf25237` (account `DA53081`, `AZURE_CENTRALINDIA`)
 - **Target Database**: `SUPPLY_CHAIN_FORGE`
-- **Schemas**: `RAW`, `GOVERNED`, `SEMANTIC`
-- **Warehouse**: `FORGE_WH` (XS)
+- **Source schemas**: `ERP_SOURCE`, `WMS_SOURCE`, `TMS_SOURCE`, `SRM_SOURCE`
+- **Derived schemas**: `GOVERNED`, `SEMANTIC`, `APP`
+- **Warehouse**: `FORGE_WH` (XSMALL, auto-suspend 60s)
 - **Roles**: `FORGE_ADMIN`, `PLANNER_ROLE`, `BUYER_ROLE`, `LOGISTICS_ROLE`
+
+### Verified account capabilities
+
+- `CORTEX_ENABLED_CROSS_REGION = ANY_REGION` — all frontier models available
+- Semantic views support `AI_VERIFIED_QUERIES`, `AI_SQL_GENERATION`,
+  `AI_QUESTION_CATEGORIZATION` in DDL
+- `SNOWFLAKE.CORTEX.DATA_AGENT_RUN()` available — agent callable from plain SQL
+- Credits consumed to date: 0.43 of ~$390 budget. Not a constraint; keep warehouses XS
+  with 60s auto-suspend and avoid materializations.
 
 ## Coordination Protocol
 
-1. Before starting work, read `.agents/HANDOFF.md`
-2. After completing a task, update `.agents/HANDOFF.md` under `## Latest from CoCo`
-3. Mark completed tasks in `.agents/TASKS.md`
-4. Log any architecture decisions in `.agents/DECISIONS.md`
+1. At session start, read `docs/SESSION_LOG.md` for the exact next action
+2. Work the queue in `.agents/tasks/COCO_TASKS.md`
+3. A task is done when its **gate** passes, not when the SQL merely runs
+4. At session end, append an entry to `docs/SESSION_LOG.md`
+5. Update `docs/MILESTONES.md` progress tracker when a milestone completes
+6. Update `.agents/HANDOFF.md` when Claude Code needs something from you
+7. Log architecture decisions in `.agents/DECISIONS.md`
 
-## Quick Start (What to do first)
+## Current State
 
-If this is a fresh session and nothing is deployed yet:
-1. Run `sql/01_setup/01_database.sql` to create the database and schemas
-2. Run `sql/01_setup/02_roles_grants.sql` to create persona roles
-3. Run table DDLs in `sql/02_tables/` in any order
-4. Run `sql/03_sample_data/seed_data.sql` to load sample data
-5. Build semantic view with `agent-studio` skill using `semantic/supply_chain.yaml`
-6. Deploy Cortex Agent using `agent/supply_chain_agent.yaml`
-7. Update HANDOFF.md so Claude Code can build the demo layer
+**Milestone**: M0 complete. M1 (Data Foundation) is next.
+**Next action**: See `docs/SESSION_LOG.md` — execute build step B1.
+
+## Critical Gotchas
+
+- **Cortex Agents use the caller's DEFAULT role**, not the session role. Grant agent
+  privileges to the default role explicitly or agent calls fail.
+- **Semantic view clause order is enforced**: `TABLES` → `RELATIONSHIPS` → `FACTS` →
+  `DIMENSIONS` → `METRICS`. Build incrementally (2 tables first), never all 9 blind.
+- **Row access policies must not change metric aggregates** across personas, or the
+  core hackathon claim breaks. Policies restrict detail rows; consistency tests assert
+  aggregate equality.
+- ERP `VBAK.ERDAT` and TMS `VTTK.PROM_DLV_DT` deliberately disagree. Only TMS is
+  authoritative. Never expose ERP's date as a promised date in the governed layer.

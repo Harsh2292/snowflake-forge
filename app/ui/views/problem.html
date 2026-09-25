@@ -1,0 +1,86 @@
+<script>
+const D = DATA;
+ACTIONS.openColumns = () => setState({ drawer: 'columns' });
+ACTIONS.filter = (sys) => setState({ sys });
+
+function systemCard(s) {
+  return `<article class="card stack gap16" style="border-radius:20px;padding:22px">
+    <div class="row between">
+      <span style="font-size:24px;font-weight:700;letter-spacing:-0.01em;color:var(--ink2)">${esc(s.code)}</span>
+      <span class="chip src small" style="padding:4px 10px">${esc(s.team)}</span>
+    </div>
+    <div class="small ink2" style="margin-top:-8px">${esc(s.name)}</div>
+    <ul style="margin:0;padding-left:18px;font-size:15px;line-height:1.6">${s.holds.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
+    <div class="well stack gap8" style="margin-top:auto">
+      <span style="font-size:18px;font-weight:600;letter-spacing:0.02em">${esc(s.column)}</span>
+      <span class="small ink2">${esc(s.means)}</span>
+    </div>
+  </article>`;
+}
+
+function dumbbell(naive, gov) {
+  const lo = Math.floor((Math.min(naive, gov) - 0.06) * 20) / 20;
+  const hi = Math.ceil((Math.max(naive, gov) + 0.04) * 20) / 20;
+  const pos = (v) => ((v - lo) / (hi - lo)) * 100;
+  const a = pos(naive), b = pos(gov);
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += 0.05) ticks.push(`<span>${Math.round(v * 100)}%</span>`);
+  return `<div style="position:relative;height:74px;margin-top:10px" role="img"
+      aria-label="On-time delivery is ${fmt('percent', naive)} using ERP's order date and ${fmt('percent', gov)} using the carrier's promised date">
+      <div style="position:absolute;left:0;right:0;top:36px;height:2px;background:var(--line)"></div>
+      <div style="position:absolute;left:${a}%;width:${b - a}%;top:35px;height:4px;background:var(--src);opacity:.5"></div>
+      <div title="Planning, ERP order date: ${fmt('percent', naive)}" style="position:absolute;left:calc(${a}% - 11px);top:26px;width:22px;height:22px;border-radius:50%;background:var(--src);box-shadow:0 0 0 3px var(--surface)"></div>
+      <div title="Logistics, carrier promised date: ${fmt('percent', gov)}" style="position:absolute;left:calc(${b}% - 11px);top:26px;width:22px;height:22px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px var(--surface)"></div>
+    </div>
+    <div class="row between small muted num">${ticks.join('')}</div>`;
+}
+
+function columnsDrawer(s) {
+  const systems = ['All', 'ERP', 'WMS', 'TMS', 'SRM'];
+  const rows = D.catalog.filter((r) => s.sys === 'All' || r.SYSTEM === s.sys);
+  const pills = systems.map((x) => `<button class="pill ${s.sys === x ? 'on' : ''}" data-act="filter" data-arg="${x}" aria-pressed="${s.sys === x}">${x}</button>`).join('');
+  const body = rows.map((r) => `<tr>
+      <td>${esc(r.SYSTEM)}</td><td>${esc(r.SOURCE_TABLE)}</td><td><b>${esc(r.SOURCE_COLUMN)}</b></td>
+      <td>${r.GOVERNED_VIEW ? esc(r.GOVERNED_VIEW + '.' + r.GOVERNED_COLUMN) : '<span class="muted">Not exposed</span>'}</td>
+      <td class="ink2">${esc(r.MEANING)}</td><td>${r.FLAG ? `<span class="tag">${esc(r.FLAG.toLowerCase())}</span>` : ''}</td></tr>`).join('');
+  return drawer('Every source column, and what it becomes', `${rows.length} columns. The governed layer renames each one to a business name.`,
+    `<div class="row gap8" style="position:sticky;top:0;background:var(--surface);padding:14px 0;z-index:1;flex-wrap:wrap">${pills}</div>
+     <table class="tbl"><thead><tr><th>System</th><th>Table</th><th>Source column</th><th>Governed name</th><th>Meaning</th><th></th></tr></thead>
+     <tbody>${body}</tbody></table>`);
+}
+
+function render(s) {
+  const gap = Math.abs(D.governed - D.naive) * 100;
+  return `<div class="root stack gap32">
+    <header>
+      <h1 class="h1">Four systems, four versions of the truth</h1>
+      <p class="lede">Sales, warehouse, transport and supplier data live in four separate systems. Each one names and
+        dates things its own way, and each team trusts its own system. So one simple question gets different answers.</p>
+    </header>
+
+    <section class="grid g4" aria-label="The four source systems">${D.systems.map(systemCard).join('')}</section>
+
+    <section class="card lg grid gap32" style="grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);align-items:center">
+      <div class="stack gap16">
+        <span class="h2">Leadership asks: &ldquo;What is our on-time delivery rate?&rdquo;</span>
+        <p class="body" style="margin:0">Planning counts deliveries against the ERP order&rsquo;s promised date. Logistics counts
+          against the carrier&rsquo;s promised date. Same shipments, ${gap.toFixed(1)} points apart, and nobody trusts either number.</p>
+        <div><button class="btn" data-act="openColumns">${icon('table', 18)} <span style="margin-left:6px">See every source column</span></button></div>
+      </div>
+      <div class="stack">
+        <div class="grid g2">
+          <div class="stack gap8"><span class="small ink2">Planning says</span>
+            <span class="num" style="font-size:48px;line-height:1;font-weight:600;color:var(--ink2)">${fmt('percent', D.naive)}</span>
+            <span class="small muted">using ERP&rsquo;s order date</span></div>
+          <div class="stack gap8"><span class="small ink2">Logistics says</span>
+            <span class="num" style="font-size:48px;line-height:1;font-weight:600;color:var(--blue)">${fmt('percent', D.governed)}</span>
+            <span class="small muted">using the carrier&rsquo;s promised date</span></div>
+        </div>
+        ${dumbbell(D.naive, D.governed)}
+      </div>
+    </section>
+    ${s.drawer === 'columns' ? columnsDrawer(s) : ''}
+  </div>`;
+}
+mount(render, { drawer: null, sys: 'All' });
+</script>

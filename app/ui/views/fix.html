@@ -1,0 +1,76 @@
+<script>
+const D = DATA;
+ACTIONS.layer = (id) => setState({ layer: id });
+
+function layerButton(l, i, on) {
+  const tone = l.id === 'source' ? 'var(--src)' : 'var(--blue)';
+  return `<button class="tile ${on ? 'on' : ''}" id="layer-${l.id}" data-act="layer" data-arg="${l.id}" aria-pressed="${on}"
+      style="padding:16px 18px">
+      <span class="ic" style="${on ? '' : `color:${tone}`}">${icon('layers', 22)}</span>
+      <span class="stack gap8" style="gap:2px">
+        <span style="font-size:17px;font-weight:600">${esc(l.name)}</span>
+        <span class="small ink2">${esc(l.sub)}</span>
+      </span>
+      <span class="num" style="margin-left:auto;font-size:15px;font-weight:600;color:var(--ink2)">${esc(l.count)}</span>
+    </button>
+    ${i < D.layers.length - 1 ? `<div class="row" style="justify-content:center;color:var(--muted);height:18px" aria-hidden="true">
+      <svg width="14" height="18" viewBox="0 0 14 18" fill="none"><path d="M7 1v15M2 11l5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>` : ''}`;
+}
+
+function ontology() {
+  return `<div class="stack gap12">
+    <span class="h3">How the business entities connect</span>
+    <div class="row gap8" style="flex-wrap:wrap" role="list" aria-label="Ontology: ${D.ontology.join(', then ')}">
+      ${D.ontology.map((n, i) => `<span class="chip" role="listitem" style="font-weight:600">${esc(n)}</span>${i < D.ontology.length - 1 ? `<span class="muted" aria-hidden="true">${icon('arrow', 16)}</span>` : ''}`).join('')}
+    </div></div>`;
+}
+
+function detail(l) {
+  const extra = l.id === 'semantic' ? ontology()
+    : l.id === 'source' ? `<div class="row gap8" style="flex-wrap:wrap">${D.cryptic.map((c) => `<span class="chip src">${esc(c)}</span>`).join('')}</div>`
+    : l.id === 'governed' ? `<div class="row gap8" style="flex-wrap:wrap">
+        <span class="chip">${icon('tick', 14, 'currentColor', 2.4)}Business names</span>
+        <span class="chip off">${icon('lock', 14)}Unit cost hidden from Planning</span>
+        <span class="chip off">${icon('lock', 14)}Customer names hidden from Procurement</span></div>`
+    : `<div class="well small ink2">&ldquo;${esc(D.sample_question)}&rdquo;</div>`;
+  return `<article class="card lg stack gap24" style="height:100%" aria-live="polite">
+    <div class="stack gap8"><span class="small ink2">${esc(l.sub)}</span><span class="h2" style="font-size:28px">${esc(l.name)} layer</span></div>
+    <p class="body" style="margin:0">${esc(l.summary)}</p>
+    <ul style="margin:0;padding-left:20px;font-size:16px;line-height:1.7">${l.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+    ${extra}
+  </article>`;
+}
+
+function metricCard(m) {
+  return `<article class="card stack gap12" style="border-radius:20px">
+    <div class="row gap12"><span class="avatar" style="border-radius:14px">${icon(m.key, 22)}</span><span class="h3" style="font-size:18px">${esc(m.label)}</span></div>
+    <span style="font-size:16px;font-weight:600;color:var(--blue);line-height:1.4">${esc(m.formula)}</span>
+    <span class="small ink2" style="line-height:1.5">${esc(m.definition)}</span>
+    <span class="small muted" style="margin-top:auto">${esc(m.id)}</span>
+  </article>`;
+}
+
+function render(s) {
+  const current = D.layers.find((l) => l.id === s.layer) || D.layers[2];
+  return `<div class="root stack gap32">
+    <header>
+      <h1 class="h1">One governed layer every team reads from</h1>
+      <p class="lede">Instead of each team writing its own SQL against its own system, Supply Chain Forge adds governed
+        layers in Snowflake. Every metric is defined once, and every chart, persona and agent answer reads that one definition.</p>
+    </header>
+    <section class="grid gap24" style="grid-template-columns:minmax(0,0.9fr) minmax(0,1.1fr);align-items:stretch">
+      <div class="stack" role="group" aria-label="Layers, from source data to conversation">${D.layers.map((l, i) => layerButton(l, i, l.id === current.id)).join('')}</div>
+      ${detail(current)}
+    </section>
+    <section class="stack gap16">
+      <span class="h2">Four metrics, each defined once</span>
+      <div class="grid g4">${D.metrics.map(metricCard).join('')}</div>
+    </section>
+    <section class="banner">
+      <span class="row gap12">${icon('check', 24, 'var(--good)')}The date conflict is settled in the governed layer: the carrier&rsquo;s promised date is the only one exposed.</span>
+      <span class="row gap8 small" style="flex-shrink:0"><span class="chip off">${icon('lock', 14)}ERDAT</span><span class="chip">${icon('tick', 14, 'currentColor', 2.4)}PROM_DLV_DT</span></span>
+    </section>
+  </div>`;
+}
+mount(render, { layer: 'semantic' });
+</script>

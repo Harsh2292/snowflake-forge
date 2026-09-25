@@ -1,0 +1,74 @@
+<script>
+const D = DATA;
+ACTIONS.metric = (key) => setState({ metric: key, focus: null });
+ACTIONS.dim = (id) => setState({ dim: id, focus: null });
+ACTIONS.focus = (name) => setState({ focus: name });
+ACTIONS.table = () => setState({ table: !STATE.table });
+
+function niceMax(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const k of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (k * p >= v) return k * p;
+  return 10 * p;
+}
+
+function render(s) {
+  const m = D.metrics.find((x) => x.key === s.metric) || D.metrics[0];
+  const dims = D.breakdowns[m.key];
+  const dim = dims.find((d) => d.id === s.dim && d.allowed) || dims.find((d) => d.allowed);
+  const rows = dim.rows;
+  const focus = rows.find((r) => r.name === s.focus) || rows[0];
+  const max = m.format === 'percent' ? 1 : niceMax(Math.max(...rows.map((r) => r.value), m.overall) * 1.08);
+  const pct = (v) => Math.min(100, (v / max) * 100);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => m.format === 'percent' ? Math.round(f * 100) + '%' : fmt(m.format, f * max).replace('.00', '').replace(/\.0$/, ''));
+  const blocked = dims.filter((d) => !d.allowed);
+  const delta = focus.value - m.overall;
+
+  const tiles = D.metrics.map((x) => `<button class="tile compact ${x.key === m.key ? 'on' : ''}" id="t-${x.key}" data-act="metric" data-arg="${x.key}" aria-pressed="${x.key === m.key}">
+      <span class="ic">${icon(x.key, 20)}</span><span class="lbl">${esc(x.label)}</span><span class="val">${esc(x.display)}</span></button>`).join('');
+  const pills = dims.map((d) => `<button class="pill ${d.id === dim.id ? 'on' : ''}" id="d-${d.id}" data-act="dim" data-arg="${d.id}"
+      ${d.allowed ? '' : 'disabled'} aria-pressed="${d.id === dim.id}" title="${d.allowed ? '' : esc(d.reason)}">${esc(d.label)}</button>`).join('');
+
+  const chart = `<div class="axis" aria-hidden="true"><span></span><div style="position:relative;height:16px">
+        <span class="small" style="position:absolute;left:${pct(m.overall)}%;transform:translateX(-50%);white-space:nowrap;font-weight:600;color:var(--ink2)">Overall ${fmt(m.format, m.overall)}</span></div><span></span></div>
+      <div class="bars" role="list">${rows.map((r) => `<button class="barrow ${r.name === focus.name ? 'on' : ''}" id="b-${esc(r.name)}" data-act="focus" data-arg="${esc(r.name)}"
+          aria-pressed="${r.name === focus.name}" aria-label="${esc(r.name)}: ${fmt(m.format, r.value)}" role="listitem">
+          <span class="name">${esc(r.name)}</span>
+          <span class="track"><span class="fill" style="width:${pct(r.value).toFixed(2)}%"></span><span class="ref" style="left:${pct(m.overall)}%"></span></span>
+          <span class="v">${fmt(m.format, r.value)}${m.unit ? ` <span class="muted" style="font-weight:500">${esc(m.unit)}</span>` : ''}</span></button>`).join('')}</div>
+      <div class="axis"><span></span><div class="ticks">${ticks.map((t) => `<span>${t}</span>`).join('')}</div><span></span></div>`;
+  const table = `<table class="tbl" style="font-size:15px"><thead><tr><th>${esc(dim.dim_name)}</th><th class="n">${esc(m.label)}</th><th class="n">Compared with overall</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td>${esc(r.name)}</td><td class="n"><b>${fmt(m.format, r.value)}</b></td><td class="n ink2">${deltaText(m.format, r.value - m.overall, m.unit)}</td></tr>`).join('')}</tbody></table>`;
+
+  return `<div class="root stack gap24">
+    <header class="row between" style="align-items:flex-end;gap:32px">
+      <div><h1 class="h1">Explore the numbers</h1>
+        <p class="lede">Break any metric down. Breakdowns the data model can&rsquo;t support are switched off, with the reason.</p></div>
+      <button class="switch" id="table-switch" data-act="table" aria-pressed="${!!s.table}" style="flex-shrink:0">Show as table<span class="track"><span class="knob"></span></span></button>
+    </header>
+    <section class="grid g4" style="gap:14px" role="group" aria-label="Metric">${tiles}</section>
+    <section class="row gap8" style="flex-wrap:wrap" role="group" aria-label="Break down by">
+      <span class="small ink2" style="font-weight:600;margin-right:6px">Break down</span>${pills}
+      ${blocked.length ? `<span class="small muted" style="margin-left:8px">No ${blocked.map((d) => d.dim_name.toLowerCase()).join(' or ')} view for ${esc(m.label.toLowerCase())}: ${esc(blocked[0].reason_short)}.</span>` : ''}
+    </section>
+    <section class="grid gap24" style="grid-template-columns:minmax(0,2.2fr) minmax(0,1fr);align-items:start">
+      <article class="card stack gap12" style="padding:24px 28px">
+        <div class="row between" style="align-items:baseline"><span class="h3" style="font-size:19px">${esc(m.label)} ${esc(dim.label.toLowerCase())}</span>
+          <span class="small muted">${s.table ? '' : 'Click a bar for details'}</span></div>
+        ${s.table ? table : chart}
+      </article>
+      <aside class="card stack gap16" aria-live="polite">
+        <span class="small ink2">${esc(dim.dim_name)}</span>
+        <span style="font-size:24px;font-weight:600;margin-top:-10px">${esc(focus.name)}</span>
+        <span class="num" style="font-size:46px;line-height:1;font-weight:600;color:var(--blue)">${fmt(m.format, focus.value)}${m.unit ? `<span style="font-size:20px"> ${esc(m.unit)}</span>` : ''}</span>
+        <span class="row gap8" style="font-size:15px">${Math.abs(delta) < 1e-9 ? '' : icon(delta > 0 ? 'up' : 'down', 16)}${deltaText(m.format, delta, m.unit)}</span>
+        <div class="stack gap8" style="border-top:1px solid var(--line);padding-top:16px">
+          <span class="h3">How it&rsquo;s calculated</span>
+          <span class="small ink2" style="font-size:15px;line-height:1.55">${esc(m.definition)}</span></div>
+        <span class="small muted" style="line-height:1.5">One definition from the governed semantic view, the same for every team.
+          Want to dig further? Ask the agent in step 4.</span>
+      </aside>
+    </section>
+  </div>`;
+}
+mount(render, { metric: DATA.metrics[0].key, dim: 'region', focus: null, table: false });
+</script>

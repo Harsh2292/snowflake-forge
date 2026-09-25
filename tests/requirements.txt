@@ -1,0 +1,5 @@
+# Test-only dependencies (local development). Never deployed to Streamlit in Snowflake.
+# The app's own dependencies are in app/requirements.txt.
+# After installing: python -m playwright install chromium
+pytest>=8
+playwright>=1.40

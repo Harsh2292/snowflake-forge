@@ -1,0 +1,21 @@
+-- ============================================================
+-- 01_mcp_server.sql — Snowflake-managed MCP servers
+-- Owner: CoCo
+-- Build step: B14
+-- Spec: docs/LLD.md §7a
+-- ============================================================
+
+-- TODO: CoCo populates at B14, after the agent (B10) exists.
+--
+-- Two servers by design:
+--   SUPPLY_CHAIN_MCP     → agent + analyst tools (governed path)
+--   SUPPLY_CHAIN_MCP_RO  → read-only SQL, least-privileged, SEPARATE server
+--
+-- Why separate: Snowflake explicitly warns that exposing SYSTEM_EXECUTE_SQL on the
+-- same server as an agent tool lets an MCP client bypass the semantic view and its
+-- verified queries entirely — which would defeat the whole governance story.
+--
+-- Operational gotchas:
+--   * MCP hostnames must use hyphens, not underscores
+--   * USAGE on the server does NOT grant tool access; grant each tool separately
+--   * Recursion is capped at 10 invocations; avoid agent → MCP → agent loops

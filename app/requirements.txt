@@ -1,5 +1,7 @@
-streamlit>=1.30.0
+# Local development (pip). Streamlit in Snowflake reads environment.yml instead.
+# Keep the Streamlit pin identical in both files: 1.52.2 is the newest version the
+# SiS warehouse runtime supports (docs/references/streamlit_in_snowflake.md).
+streamlit==1.52.2
+pandas>=2.1
 snowflake-snowpark-python>=1.11.0
 snowflake-connector-python>=3.6.0
-plotly>=5.18.0
-pandas>=2.1.0

@@ -1,0 +1,65 @@
+<script>
+const D = DATA;
+ACTIONS.metric = (key) => setState({ metric: key });
+ACTIONS.rows = () => setState({ drawer: 'rows' });
+
+function tile(m, on) {
+  return `<button class="tile ${on ? 'on' : ''}" id="tile-${m.key}" data-act="metric" data-arg="${m.key}" aria-pressed="${on}">
+    <span class="ic">${icon(m.key, 24)}</span>
+    <span class="stack" style="gap:2px"><span class="lbl">${esc(m.label)}</span><span class="val">${esc(m.display)}</span></span>
+  </button>`;
+}
+
+function personaCard(p, m, row) {
+  const v = row.values[p.key];
+  const ok = row.identical;
+  const chips = p.visibility.map((c) => c.visible
+    ? `<span class="chip">${icon('tick', 14, 'currentColor', 2.4)}${esc(c.label)}</span>`
+    : `<span class="chip off">${icon('lock', 14)}${esc(c.label)}<span style="position:absolute;left:-9999px"> (hidden)</span></span>`).join('');
+  return `<article class="card stack gap16">
+    <div class="row gap12"><span class="avatar">${esc(p.initials)}</span>
+      <span class="stack"><span style="font-size:18px;font-weight:600">${esc(p.label)}</span><span class="small muted">${esc(p.desc)}</span></span></div>
+    <div class="row between" style="align-items:baseline;gap:12px">
+      <span class="num" style="font-size:40px;line-height:1;font-weight:600;letter-spacing:-0.01em;color:var(--blue)">${v.toFixed(6)}</span>
+      <span class="row gap8 small" style="font-weight:600">${icon(ok ? 'check' : 'cross', 18, ok ? 'var(--good)' : 'var(--critical)')}${ok ? 'Matches' : 'Differs'}</span>
+    </div>
+    <div class="stack gap12" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="small ink2" style="font-weight:600">What this team can see</span>
+      <div class="row gap8" style="flex-wrap:wrap;position:relative">${chips}</div>
+    </div>
+  </article>`;
+}
+
+function rowsDrawer() {
+  const tables = D.personas.map((p) => `<section class="stack gap8" style="margin-top:18px">
+      <span class="h3">${esc(p.label)}</span>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr>${p.sample.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${p.sample.rows.map((r) => `<tr>${r.map((v) => `<td class="${String(v).startsWith('***') || v === '' ? 'muted' : ''}">${v === '' ? 'hidden' : esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    </section>`).join('');
+  return drawer('The rows each team gets', 'Same records, masked by Snowflake policy according to each role.', tables);
+}
+
+function render(s) {
+  const m = D.metrics.find((x) => x.key === s.metric) || D.metrics[0];
+  const row = D.grid[m.key];
+  const verdict = row.identical
+    ? `All three teams get ${row.values[D.personas[0].key].toFixed(6)} for ${m.label.toLowerCase()}, identical to ${D.dp} decimal places.`
+    : `The teams disagree on ${m.label.toLowerCase()}. Check the persona procedures.`;
+  return `<div class="root stack gap24">
+    <header>
+      <h1 class="h1">Does every team see the same number?</h1>
+      <p class="lede">Pick a metric. Each team&rsquo;s number is calculated separately, under that team&rsquo;s own access rules.
+        They see different details, but they get the same answer.</p>
+    </header>
+    <section class="grid g4" role="group" aria-label="Metric">${D.metrics.map((x) => tile(x, x.key === m.key)).join('')}</section>
+    <section class="grid g3">${D.personas.map((p) => personaCard(p, m, row)).join('')}</section>
+    <section class="banner">
+      <span class="row gap12">${icon(row.identical ? 'check' : 'cross', 24, row.identical ? 'var(--good)' : 'var(--critical)')}${esc(verdict)}</span>
+      <button class="btn" data-act="rows" style="flex-shrink:0">${icon('table', 18)} <span style="margin-left:6px">See the rows each team gets</span></button>
+    </section>
+    ${D.practice ? `<p class="small muted" style="margin:-8px 0 0">${esc(D.practice)}</p>` : ''}
+    ${s.drawer === 'rows' ? rowsDrawer() : ''}
+  </div>`;
+}
+mount(render, { metric: DATA.metrics[0].key, drawer: null });
+</script>

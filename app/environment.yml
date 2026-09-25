@@ -1,0 +1,10 @@
+# Streamlit in Snowflake (warehouse runtime) dependencies: Snowflake Conda channel only,
+# `=` to pin, `*` for ranges, no pip section. Keep in step with requirements.txt.
+name: forge-demo
+channels:
+  - snowflake
+dependencies:
+  - python=3.11
+  - streamlit=1.52.2
+  - pandas=2.*
+  - snowflake-snowpark-python

@@ -80,8 +80,64 @@ Supporting relationships:
 ## ADR-005: Agent Split (CoCo vs Claude Code)
 
 **Date**: 2024-09-24
-**Status**: Accepted
+**Status**: Superseded by ADR-006
 
 **Decision**: CoCo owns all Snowflake objects (SQL, semantic views, agent config, governance). Claude Code owns all application code (Streamlit, tests, demo scripts). The `.agents/HANDOFF.md` file is the coordination bridge.
 
 **Rationale**: CoCo has direct Snowflake execution + specialized skills (agent-studio, data-governance). Claude Code excels at application scaffolding and test writing. Clean ownership prevents conflicts.
+
+**Why superseded**: the ownership split was right, but the *sequencing* was wrong — it left Claude Code blocked and idle until M4. See ADR-006.
+
+---
+
+## ADR-006: Frozen Interface Contract for Parallel Execution
+
+**Date**: 2026-09-24
+**Status**: Accepted
+
+**Decision**: Introduce `docs/CONTRACT.md`, frozen at v1.0, as the binding interface
+between the two agents. It fixes: FQNs, role names, metric identifiers, dimension
+identifiers, valid metric × dimension pairings, governed view column names, the masking
+matrix, query patterns, expected value ranges, and mock fixtures.
+
+Neither agent may change it unilaterally. Deviations are filed as Change Requests in
+§11 and escalated to the user. CoCo's build step B13 is a full conformance audit against
+it.
+
+Claude Code builds the entire application against the contract using a mock data layer
+(`USE_MOCK_DATA = True`) while CoCo builds Snowflake reality to match. One flag flip
+switches the app to live.
+
+**Rationale**: the previous plan blocked Claude Code until milestone M4 — roughly 70% of
+the project spent idle. The blocker was not ownership, it was the absence of a stable
+interface to build against. Freezing the interface removes the dependency without
+creating collision risk, because both sides target the same immutable spec rather than
+each other's in-progress work.
+
+**Consequence**: integration risk shifts from "will the halves fit?" to "does reality
+match the contract?" — which is a single auditable check (B13) rather than an open-ended
+debugging session at the end.
+
+---
+
+## ADR-007: Two MCP Servers, Deliberately Split
+
+**Date**: 2026-09-24
+**Status**: Accepted
+
+**Decision**: Create two Snowflake-managed MCP servers rather than one:
+
+| Server | Tools | Purpose |
+|--------|-------|---------|
+| `SUPPLY_CHAIN_MCP` | `CORTEX_AGENT_RUN`, `CORTEX_ANALYST_MESSAGE` | The governed path |
+| `SUPPLY_CHAIN_MCP_RO` | `SYSTEM_EXECUTE_SQL` (read-only, least-privileged) | Schema introspection only |
+
+**Rationale**: Snowflake's own guidance warns that exposing `SYSTEM_EXECUTE_SQL` on the
+same server as an agent tool lets an MCP client bypass the semantic view, its metric
+definitions, and its verified queries. For a project whose entire thesis is *governed*
+analytics, co-locating them would undermine the claim. Splitting them is both the correct
+security posture and a defensible design choice to explain to judges.
+
+**Consequence**: Claude Code uses the read-only server for development verification and
+the governed server for actual agent calls. Grants are issued per tool, since `USAGE` on
+an MCP server does not imply tool access.

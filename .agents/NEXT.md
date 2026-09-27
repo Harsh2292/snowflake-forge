@@ -3,29 +3,39 @@
 > **Single source of truth for "what's next".** Read this, open the named card, execute it.
 > Whichever agent finishes a card updates this file.
 
-**Last updated**: 2026-09-25 · **Contract**: v1.3 · **Branch**: `development`
+**Last updated**: 2026-09-27 · **Contract**: v1.4 · **Branch**: `development`
 
 ---
 
-## CoCo → `B07_governed_views.md`
+## CoCo → `B08` Semantic view
 
 ```
-.agents/tasks/coco/B07_governed_views.md
+.agents/tasks/coco/B08_semantic_view.md   (to be written at planning time)
 ```
 
-Create 9 conformed views in `GOVERNED` schema with business naming, attach 4 dynamic masking policies, grant permissions, and capture artifact `03_governed_columns.json`.
+Build `SEMANTIC.SUPPLY_CHAIN_SV` incrementally over the governed views, capture art 05 and
+art 06, then build the three `SP_METRICS_AS_*` procedures (CR-002). The B8 section of
+`COCO_TASKS.md` lists what B07/B07b carried in: the CR-005 fill-rate filter, the §3 DOI
+formula, the GAP-2 time dimensions, and persona `SELECT` on the semantic view.
 
 ---
 
-## Claude Code → C05 Demo script, README
+## Claude Code → C6a Reconcile governed layer (card written, needs the user's go-ahead)
 
 ```
-.agents/tasks/claude/C05_demo_docs.md   (to be written at planning time, from CLAUDE_TASKS.md Track C5)
+.agents/tasks/claude/C06a_reconcile_governed.md   (planned 2026-09-27, on hold)
 ```
 
-Timed 5-minute demo script, talking points per judging criterion, and the README. C04 is
-done: `pytest -q` runs the contract as tests (176 passed; live variants skip without
-Snowflake) and `pytest -m ui` checks every screen in a browser (18 passed).
+**Paused 28–30 Sep** (the user is away). Resume on 30 Sep / 1 Oct in this order:
+1. **C6a**: ask the user to approve the card, then build it. Art 03 and 04 already match
+   the contract, with 0 mismatches found on the first check.
+2. **C6b / C6c**: as soon as CoCo lands art 05/06 (B08) and art 07–09 (B10/B11).
+3. **C05**: demo script and README, with the real numbers.
+4. Last day: rehearsal, the user records the video, submission.
+
+Already done: contract v1.4 (`fill_rate` string in `config.py`), C04 tests (`pytest -q`
+188 passed; live variants skip without Snowflake; `pytest -m ui` 18 passed), C07 CI and
+deploy script.
 
 ---
 
@@ -101,10 +111,10 @@ Everything else overlaps.
 | B04 | Data generation | ✅ |
 | B05 | Distribution verification | ✅ |
 | B06 | Tags and masking policies | ✅ |
-| B07 | Governed views (9) → art 03 | ⬜ NEXT |
-| B07b | Persona procedures (3) → art 04 | ⬜ |
+| B07 | Governed views (9) → art 03 | ✅ |
+| B07b | Persona sample procedures (3) → art 04 | ✅ |
 | B07c | MCP read-only — **DEFERRED**, not needed | ⏸ |
-| B08 | Semantic view → art 05, 06 | ⬜ |
+| B08 | Semantic view → art 05, 06 (+ `SP_METRICS_AS_*`) | ⬜ NEXT |
 | B09 | Verified queries, AI instructions | ⬜ |
 | B10 | Cortex Agent → art 07, 08 | ⬜ |
 | B11 | Cross-persona consistency → art 09 | ⬜ |
@@ -124,7 +134,8 @@ Everything else overlaps.
 | C03 | Streamlit app (guided story + Explore), Revision 2 | ✅ |
 | C04 | Test suite | ✅ |
 | C05 | Demo script, README | ⬜ NEXT |
-| C6a | Reconcile governed layer | 🔒 needs art 03, 04 |
+| C07 | CI tests on GitHub + one-command deploy script | ✅ |
+| C6a | Reconcile governed layer | ⏸ card written, on hold by user (v1.4 config string done; first check: 0 mismatches) |
 | C6b | Reconcile semantic layer | 🔒 needs art 05, 06 |
 | C6c | Agent parser + proof grid | 🔒 needs art 07–09 |
 

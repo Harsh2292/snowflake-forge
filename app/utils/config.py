@@ -1,6 +1,6 @@
 """Contract constants for the Supply Chain Forge app.
 
-Everything here is copied from docs/CONTRACT.md (v1.3). If Snowflake turns out to differ
+Everything here is copied from docs/CONTRACT.md (v1.4). If Snowflake turns out to differ
 from these values, file a Change Request in CONTRACT.md §11. Do not edit them to match
 reality.
 """
@@ -63,7 +63,8 @@ METRICS = {
         "label": "Fill Rate",
         "format": "percent",
         "definition": "Quantity shipped divided by quantity ordered across order "
-                      "lines. Partial shipments are pro-rated.",
+                      "lines on shipped or delivered orders. Open and cancelled "
+                      "orders are excluded. Partial shipments are pro-rated.",  # v1.4, CR-005
     },
     "days_of_inventory": {
         "id": "inventory.days_of_inventory",

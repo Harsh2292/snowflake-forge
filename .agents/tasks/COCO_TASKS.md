@@ -77,27 +77,30 @@ contract. The two tracks meet at **B14 (MCP server)** and **B17 (handoff)**.
 - [x] **Gate**: 5 tags and 4 masking policies exist in GOVERNED schema
 
 ### B7 — Governed Views
-- [ ] Write `sql/04_governance/04_governed_views.sql` — 9 conformed views
-- [ ] Rename all cryptic columns per LLD §4 and contract §7
-- [ ] Derived time dimensions per `docs/GAPS_RESOLVED.md` GAP-2
-- [ ] Expose only `shipments.promised_delivery_date` as authoritative; do NOT expose ERP `ERDAT` as a promised date
-- [ ] **Capture artifact** `docs/artifacts/03_governed_columns.json` — real
-      INFORMATION_SCHEMA.COLUMNS dump for all 9 views
-- [ ] **Gate**: all 3 roles can `SELECT` every view; masking behaves per matrix
+- [x] Write `sql/04_governance/03_governed_views.sql` — 9 conformed views, masking + tags inline
+- [x] Rename all cryptic columns per LLD §4 and contract §7 (65/65 columns match)
+- [x] Derived time dimensions per `docs/GAPS_RESOLVED.md` GAP-2 → **moved to B08** as
+      semantic-view dimension expressions, so `V_ORDER` stays exactly contract §7
+- [x] Expose only `shipments.promised_delivery_date` as authoritative; do NOT expose ERP `ERDAT` as a promised date
+- [x] **Capture artifact** `docs/artifacts/03_governed_columns.json` — real
+      INFORMATION_SCHEMA.COLUMNS dump for all 9 views (+ POLICY_REFERENCES)
+- [x] **Gate**: all 3 roles can `SELECT` every view; masking behaves per matrix
+- Found: fill rate per §3 wording = 0.787449 (all lines) → **CR-005 ACCEPTED (v1.4)**, applied at B8
 
 ### B7b — Persona Procedures  ⬅ added by CR-001
 Required because `USE ROLE` does not work inside Streamlit in Snowflake.
 See `docs/GAPS_RESOLVED.md` GAP-1 and contract §6a.
-- [ ] Write `sql/04_governance/05_persona_procedures.sql`
-- [ ] Create `GOVERNED.SP_SAMPLE_AS_PLANNER()`, `..._AS_BUYER()`, `..._AS_LOGISTICS()`
-- [ ] All three `EXECUTE AS OWNER`, returning the column shape in contract §5.4
-- [ ] `GRANT OWNERSHIP` of each procedure to its corresponding persona role
-- [ ] `GRANT USAGE` on each to `FORGE_ADMIN` (the app owner)
-- [ ] **Capture artifact** `docs/artifacts/04_persona_outputs.json` — actual output of
+- [x] Write `sql/04_governance/04_persona_procedures.sql`
+- [x] Create `GOVERNED.SP_SAMPLE_AS_PLANNER()`, `..._AS_BUYER()`, `..._AS_LOGISTICS()`
+- [x] All three `EXECUTE AS OWNER`, returning the column shape in contract §5.4
+- [x] `GRANT OWNERSHIP` of each procedure to its corresponding persona role
+- [x] `GRANT USAGE` on each to `FORGE_ADMIN` (the app owner)
+- `SP_METRICS_AS_*` (CR-002) moved to the **end of B8**: they need `SUPPLY_CHAIN_SV`
+- [x] **Capture artifact** `docs/artifacts/04_persona_outputs.json` — actual output of
       all three procedures, with real masked values
-- [ ] **Gate**: calling all three as `FORGE_ADMIN` returns three genuinely different
+- [x] **Gate**: calling all three as `FORGE_ADMIN` returns three genuinely different
       masked result sets matching contract §6 exactly
-- [ ] Update `docs/SESSION_LOG.md`
+- [x] Update `docs/SESSION_LOG.md`
 
 ### B7c — MCP Read-Only Server  ⬅ DEFERRED, not currently needed
 **Do not build this yet.** Claude Code verifies via **artifact handoff**
@@ -128,6 +131,19 @@ Build this only if artifacts prove insufficient. When that happens:
 - [ ] **Capture artifact** `docs/artifacts/06_dimension_matrix.md` — every metric ×
       dimension pairing tested, pass/fail plus error text for failures
 - [ ] **Gate**: all 4 metrics return values; at least one metric × dimension combo works
+- **Carried in from B07 / B07b** (2026-09-27):
+  - [ ] `order_lines.fill_rate` excludes OPEN and CANCELLED orders (**CR-005, v1.4**), via
+        the `order_lines → orders` relationship. Expected live value 0.926485.
+  - [ ] `inventory.days_of_inventory` = AVG(on_hand) / AVG(daily_usage), as §3 words it.
+        Expected 28.499215 (art 02's 28.51 was an average of per-row ratios).
+  - [ ] `orders.order_year/quarter/month` (and `order_week`) as dimension expressions per
+        GAP-2; `V_ORDER` deliberately does not carry them.
+  - [ ] `GRANT SELECT ON SEMANTIC VIEW` to the 3 persona roles.
+  - [ ] **Then build `GOVERNED.SP_METRICS_AS_{PLANNER,BUYER,LOGISTICS}()`** (CR-002): the
+        same pattern as `sql/04_governance/04_persona_procedures.sql` (owner's rights,
+        `PERSONA` from `CURRENT_ROLE()`, ownership to the persona role, `USAGE` to
+        `FORGE_ADMIN`). Gate: all 4 metrics identical across the three to 6 dp, and equal
+        to the semantic view.
 
 ### B9 — AI Instructions & Verified Queries
 - [ ] Add `AI_SQL_GENERATION` instruction block
@@ -192,7 +208,27 @@ entire app assuming these exact names.
 - [ ] Grant `USAGE` on the MCP server to the persona roles
 - [ ] **Gate**: MCP tool discovery returns the expected tool list
 
-### B15 — Handoff
+### B15 — Deploy app to SiS + Handoff
+**Deploy with Claude Code's script (C07). Do NOT use the old PUT list in
+`docs/references/streamlit_in_snowflake.md` §7**: it missed `ui/` and `.streamlit/`.
+```
+set SNOWFLAKE_CONNECTION_NAME=<connection>
+python deploy/deploy_app.py --dry-run     # 25 files + SQL, no connection (checked 2026-09-27)
+python deploy/deploy_app.py               # deploy / redeploy, as FORGE_ADMIN (the app owner)
+```
+- [ ] Needs `snowflake-snowpark-python` in the venv (not installed as of 2026-09-27)
+- [ ] Pre-req grants for `FORGE_ADMIN`: `CREATE STAGE` and `CREATE STREAMLIT` on `APP` (B02
+      has both), `USAGE` on `FORGE_WH` (B02 has it)
+- [ ] **Grant `SELECT` on `TMS_SOURCE.VTTK` and `ERP_SOURCE.VBAK` to `FORGE_ADMIN` only.**
+      The §8 naive-OTD query (`forge_data.get_naive_otd()`) runs as the app owner, and
+      `FORGE_ADMIN` alone is denied today (verified 2026-09-27). Persona roles don't
+      inherit `FORGE_ADMIN`, so masking isn't bypassed.
+- [ ] `FORGE_ADMIN` also needs: `SELECT` on `SUPPLY_CHAIN_SV` (B08),
+      `SNOWFLAKE.DATA_QUALITY_MONITORING_VIEWER` (B12), and `USAGE` on the agent (B10)
+- [ ] A replaced app loses its grants: pass `--grant-usage <roles>` on every deploy if
+      other roles should open it
+- [ ] Verify in SiS: the HTML views render (inline `<script>` in Components v1 iframes);
+      if blocked, tell Claude Code (a native fallback exists)
 - [ ] Update `.agents/HANDOFF.md` with all deployed FQNs, role names, and MCP endpoint
 - [ ] Mark every `Ready for Handoff` row as DONE
 - [ ] Tell the user Claude Code is unblocked for Track C6

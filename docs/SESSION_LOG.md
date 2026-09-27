@@ -26,6 +26,69 @@
 
 ---
 
+## Session 18 — 2026-09-27 — CoCo
+
+**Milestone**: M2 (Governance Layer) complete
+**Build steps completed**: B07b ✅ (and contract v1.4)
+**Credits used this session**: < 0.01
+
+### Done
+- **CR-005 accepted by the user.** Contract is now **v1.4**: the §3 `fill_rate` definition excludes OPEN and CANCELLED orders.
+- **Scope decision (the user's):** `SP_METRICS_AS_*` move to the end of B08, because they need `SUPPLY_CHAIN_SV`. The B8 section of COCO_TASKS.md lists everything carried in.
+- **B07b:** wrote `sql/04_governance/04_persona_procedures.sql`.
+  - 3 owner's-rights `SP_SAMPLE_AS_*` procedures with identical bodies, each owned by its persona role, with `USAGE` granted to `FORGE_ADMIN`.
+  - `PERSONA` is derived from `CURRENT_ROLE()`, so every result shows which role the procedure ran as.
+- **Gate passed** (as `FORGE_ADMIN`):
+  - 3 rows per procedure, with the same IDs everywhere.
+  - The 10 §5.4 columns in order (checked with `DESCRIBE RESULT`).
+  - Masking matches §6 for all 6 columns.
+  - Persona roles on their own can't read source tables.
+- **Captured art 04** (`docs/artifacts/04_persona_outputs.json`); its SHA-256 matches Snowflake's hash of the result. **Stage 1 is complete, so Claude Code's C6a is unlocked.**
+- **Found while running the gate:**
+  - In this session, `USE ROLE` stopped carrying over between separate statements. Role-switched checks now run inside one `EXECUTE IMMEDIATE` block.
+  - The user has **secondary roles = ALL** (including `ACCOUNTADMIN`), which lets a persona session read source tables. With secondary roles off, persona roles are denied.
+  - Masking is unaffected, because it uses `CURRENT_ROLE()`. B07's access check was re-run with secondary roles off, and it passes.
+
+### Blocked / Open
+- Nothing blocked.
+
+### Next action (exact)
+- **CoCo**: plan B08 (semantic view → art 05/06, then `SP_METRICS_AS_*`).
+- **Claude Code**: C05; C6a is unlocked; update the `fill_rate` definition string in `config.py` (v1.4).
+
+---
+
+## Session 17 — 2026-09-27 — CoCo
+
+**Milestone**: M2 (Governance Layer)
+**Build steps completed**: B07 ✅
+**Credits used this session**: < 0.01
+
+### Done
+- **B07 (Governed views)**:
+  - Wrote `sql/04_governance/03_governed_views.sql`: 9 conformed views in `GOVERNED`, owned by `ACCOUNTADMIN` (it owns the source tables; `FORGE_ADMIN` has no `SELECT` on them). Masking policies and tags are attached **inline** in `CREATE OR REPLACE VIEW`, so each view is created with its masking in one atomic statement and the script can be re-run. `SELECT` on all views granted to `FORGE_ADMIN` and the 3 persona roles.
+  - `V_ORDER` does not expose ERP `ERDAT`; `V_SHIPMENT.promised_delivery_date` (TMS) is the only promised date.
+  - GAP-2 time columns (`order_year/quarter/month/week`) go into B08 as semantic-view dimension expressions, so `V_ORDER` stays exactly §7.
+  - Gate passed:
+    - 9 views.
+    - 65/65 columns match §7 in name and order.
+    - The full §6 matrix holds on every row, per role (with `CURRENT_ROLE()` shown in each result).
+    - View row counts equal source row counts.
+    - The 4 metrics are identical across all 3 personas to 6 dp.
+  - Captured `docs/artifacts/03_governed_columns.json`: columns plus `POLICY_REFERENCES`. Its SHA-256 matches Snowflake's hash of the captured result.
+- **Found at the metric check**:
+  - Fill rate as §3 defines it is 0.787449 over all lines, below the §3 range. The artifact 02 value of 0.9265 excluded OPEN and CANCELLED orders.
+  - Raised **CR-005 (PROPOSED)** in CONTRACT §11 to make that exclusion explicit.
+  - Days of inventory as §3 defines it is 28.499215. Artifact 02's 28.51 was an average of per-row ratios; no CR is needed, and B08 will use the §3 formula.
+
+### Blocked / Open
+- ~~CR-005 needs a decision~~ Accepted in Session 18 (contract v1.4).
+
+### Next action (exact)
+- **CoCo**: B07b (`.agents/tasks/coco/B07b_persona_procedures.md`), the 6 persona procedures and artifact `04_persona_outputs.json`.
+
+---
+
 ## Session 16 — 2026-09-25 — CoCo
 
 **Milestone**: M2 (Governance Layer)
@@ -123,6 +186,61 @@
 
 ### Next action (exact)
 - **CoCo**: Execute **B05** (`.agents/tasks/coco/B05_verify_distributions.md`) — capture artifact `docs/artifacts/02_raw_metrics.md` and complete distribution verification.
+
+---
+
+## Session 15 — 2026-09-27 — Claude Code
+
+**Milestone**: M2 → M3
+**Build steps completed**: contract v1.4 applied (CR-005, `fill_rate` definition)
+**Credits used this session**: 0
+
+### Done
+- Read CoCo's message: B07 and B07b done, Stage 1 artifacts (03, 04) DONE, contract v1.4.
+- `app/utils/config.py`: `fill_rate` definition now matches §3 v1.4 verbatim. New unit
+  tests compare `config.py` with the contract's Python blocks (§2, §3, §10). 188 passed.
+- First comparison of art 03 and art 04 against §5.4, §6 and §7: **0 mismatches**.
+- Wrote the C6a card. **The user put it on hold** (not approved).
+
+### Blocked / Open
+- The user is unavailable 28–30 Sep (interviews). Then about 4 working days to
+  submission. The plan to finish in that time is in the user conversation, and the
+  priority order is recorded below.
+
+### Next action (exact)
+When the user is back:
+1. **CoCo**: B08 (semantic view + `SP_METRICS_AS_*`) → B09 → B10 → B11 → B15 deploy.
+2. **Claude Code**: C6a (approve and run) → C6b / C6c as art 05–09 land → C05 docs.
+3. Last day: rehearsal, video, submission.
+
+---
+
+## Session 14 — 2026-09-27 — Claude Code
+
+**Milestone**: M2
+**Build steps completed**: C07 ✅ (CI + deploy script)
+**Credits used this session**: 0
+
+### Done
+- The user asked whether the project covers CI/CD. It didn't, and the documented deploy
+  steps (`docs/references/streamlit_in_snowflake.md` §7) missed `ui/` and `.streamlit/`,
+  so the app would have failed to start at B15. Corrected.
+- `deploy/deploy_app.py`: one command uploads all of `app/` and (re)creates
+  `SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO`, with `--dry-run`, `--role` and `--grant-usage`.
+  10 offline tests with a fake session.
+- `.github/workflows/tests.yml`: `pytest -q`, the deploy dry run and `pytest -m ui` on
+  every push; screenshots kept as a build artifact. No Snowflake secrets on GitHub.
+- Verified in a fresh venv built only from the requirements files: 186 passed, 18 browser
+  tests passed.
+- CLAUDE.md: Claude Code also owns `deploy/` and `.github/`.
+
+### Blocked / Open
+- The first GitHub Actions run happens when the user pushes. Check the Actions tab.
+
+### Next action (exact)
+**Claude Code**: waiting on the user's choice of the CoCo tasks to take over (B11 script,
+B13 audit, M6 tricky-question tests, B17 review, and B12/B14 files if CoCo hands them
+over), or C05.
 
 ---
 

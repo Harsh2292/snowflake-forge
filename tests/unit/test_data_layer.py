@@ -182,6 +182,29 @@ def test_quality_results_have_status():
     assert (df.loc[df["METRIC_NAME"] != "FRESHNESS", "STATUS"] == "PASS").all()
 
 
+# ── config.py matches the contract text ──────────────────────────────────────
+
+def contract_python(section_heading: str) -> dict:
+    """Run the ```python blocks after a CONTRACT.md heading (until the next ## heading)."""
+    section = CONTRACT[CONTRACT.index(section_heading):]
+    section = section[:section.index("\n## ", 1)]
+    namespace = {}
+    for block in re.findall(r"```python\n(.*?)```", section, re.S):
+        exec(block, namespace)  # noqa: S102  our own contract file
+    return namespace
+
+
+def test_metrics_are_copied_verbatim_from_contract_3():
+    assert contract_python("## 3. Canonical Metrics")["METRICS"] == config.METRICS
+
+
+def test_personas_and_mock_fixtures_are_copied_verbatim():
+    assert contract_python("## 2. Persona Roles")["PERSONA_ROLES"] == config.PERSONA_ROLES
+    mock = contract_python("## 10. Mock Mode")
+    assert mock["MOCK_METRICS"] == config.MOCK_METRICS
+    assert mock["MOCK_BY_REGION"] == config.MOCK_BY_REGION
+
+
 # ── SQL matches the contract text ────────────────────────────────────────────
 
 def test_metric_only_sql_matches_contract_5_1():

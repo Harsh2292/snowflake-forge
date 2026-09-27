@@ -9,7 +9,11 @@
 > CoCo implements the Snowflake side to match this exactly.
 > Claude Code implements the app side to match this exactly.
 >
-> **Version**: 1.3 · **Frozen**: 2026-09-25
+> **Version**: 1.4 · **Frozen**: 2026-09-27
+>
+> **v1.4 change**:
+> - **CR-005**: `fill_rate` counts only order lines on shipped or delivered orders; open
+>   and cancelled orders are excluded (§3). Value, range and mocks are unchanged.
 >
 > **v1.3 change**:
 > - **CR-004**: Appended `CONTRACT_PRICE` and `CUSTOMER_EMAIL` to `SP_SAMPLE_AS_*` procedure return shapes in §5.4, covering all 6 masked columns from §6.
@@ -90,7 +94,8 @@ METRICS = {
         "label": "Fill Rate",
         "format": "percent",
         "definition": "Quantity shipped divided by quantity ordered across order "
-                      "lines. Partial shipments are pro-rated.",
+                      "lines on shipped or delivered orders. Open and cancelled "
+                      "orders are excluded. Partial shipments are pro-rated.",
     },
     "days_of_inventory": {
         "id": "inventory.days_of_inventory",
@@ -512,6 +517,54 @@ then shows all six.
 
 **Impact on Claude Code**: `tests/governance/test_masking.py` already has the two checks;
 they're enabled with mock sample updated.
+
+---
+
+### CR-005 — Fill rate: define the line population (exclude OPEN and CANCELLED orders)
+**Requested by**: CoCo
+**Raised**: 2026-09-27, during B07 gate
+**Status**: **ACCEPTED** (2026-09-27, by the user) — folded into v1.4
+
+**Reason**: B07's gate computed the four metrics from the governed views under all three
+persona roles. They are identical across roles (6 dp), as §6 requires. But fill rate as
+§3 literally defines it ("quantity shipped divided by quantity ordered across order
+lines") is **0.787449** over all 2,400 lines, which is **outside the §3 range 0.90–0.95**.
+
+Measured on the live data (`V_ORDER_LINE` joined to `V_ORDER`):
+
+| Order status | Lines | Ordered | Shipped | Fill rate |
+|---|---|---|---|---|
+| DELIVERED | 1,680 | 183,840 | 170,325 | 0.926485 |
+| SHIPPED | 360 | 39,420 | 36,522 | 0.926484 |
+| OPEN | 240 | 26,340 | 0 | 0 |
+| CANCELLED | 120 | 13,080 | 0 | 0 |
+| **All lines** | 2,400 | 262,680 | 206,847 | **0.787449** |
+| **SHIPPED + DELIVERED** | 2,040 | 223,260 | 206,847 | **0.926485** |
+
+Open orders haven't been due to ship yet, and cancelled orders are no longer an obligation
+to fulfil, so counting them as unfilled understates performance. Artifact
+`02_raw_metrics.md` (0.9265) and `MOCK_METRICS` (0.9283) already assume this exclusion
+without saying so.
+
+**Proposed change**:
+- §3 `fill_rate` definition becomes: *"Quantity shipped divided by quantity ordered across
+  order lines on shipped or delivered orders. Open and cancelled orders are excluded.
+  Partial shipments are pro-rated."*
+- The §3 range (0.90–0.95) is unchanged; the live value is 0.926485.
+- §6 invariant unaffected: `order_status` is not masked.
+
+**Impact on CoCo**: at B08, `order_lines.fill_rate` gets the filter through the
+`order_lines → orders` relationship, e.g. `SUM(IFF(orders.order_status IN ('SHIPPED',
+'DELIVERED'), quantity_shipped, 0)) / NULLIFZERO(SUM(IFF(orders.order_status IN
+('SHIPPED','DELIVERED'), quantity_ordered, 0)))`. No change to B07's views.
+
+**Impact on Claude Code**: `app/utils/config.py` copies the §3 definition text verbatim,
+so that string changes. Values, ranges and tests don't change.
+
+**Related, no CR needed**: `days_of_inventory` computed as §3 defines it (average on-hand
+÷ average daily usage) is **28.499215**. `02_raw_metrics.md` shows 28.51 because B05
+averaged the per-row ratios (28.511778). The §3 definition stands, and B08 implements it
+as written.
 
 ---
 

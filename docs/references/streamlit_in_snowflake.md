@@ -213,14 +213,29 @@ Rules: Snowflake channel only, `=` to pin, `*` for ranges, **no `pip:` section**
 
 ---
 
-## 7. Deployment (CoCo does this at B15; recorded so C03 builds a deployable shape)
+## 7. Deployment (CoCo runs it at B15)
+
+**Use the script. It uploads the whole `app/` folder, subfolders included:**
+
+```
+set SNOWFLAKE_CONNECTION_NAME=<connection>
+python deploy/deploy_app.py --dry-run     # show the 25 files and the SQL first
+python deploy/deploy_app.py               # deploy, or redeploy after any app change
+```
+
+> **Corrected 2026-09-27 (C07).** This section used to upload only `streamlit_app.py`,
+> `environment.yml` and `utils/*.py`. The app also needs `ui/`, `ui/screens/`,
+> `ui/views/` (HTML, CSS, JS) and `.streamlit/config.toml`; without them it fails to start.
+
+What the script runs (from `--dry-run`):
 
 ```sql
+USE ROLE FORGE_ADMIN;                          -- the app owner
+USE WAREHOUSE FORGE_WH;
 CREATE STAGE IF NOT EXISTS SUPPLY_CHAIN_FORGE.APP.FORGE_STAGE;
-PUT file:///…/app/streamlit_app.py  @SUPPLY_CHAIN_FORGE.APP.FORGE_STAGE/app AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-PUT file:///…/app/environment.yml   @SUPPLY_CHAIN_FORGE.APP.FORGE_STAGE/app AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-PUT file:///…/app/utils/*.py        @SUPPLY_CHAIN_FORGE.APP.FORGE_STAGE/app/utils AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-
+REMOVE @SUPPLY_CHAIN_FORGE.APP.FORGE_STAGE/app/;   -- no stale files from earlier deploys
+-- PUT every file under app/ into the same folder under @…/app
+--   (AUTO_COMPRESS=FALSE, OVERWRITE=TRUE; skips requirements.txt, __pycache__, *.pyc)
 CREATE OR REPLACE STREAMLIT SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO
   FROM '@SUPPLY_CHAIN_FORGE.APP.FORGE_STAGE/app'
   MAIN_FILE = 'streamlit_app.py'
@@ -228,15 +243,25 @@ CREATE OR REPLACE STREAMLIT SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO
   TITLE = 'Supply Chain Forge';
   -- warehouse runtime: omit RUNTIME_NAME / COMPUTE_POOL
   -- (explicit form: RUNTIME_NAME = 'SYSTEM$WAREHOUSE_RUNTIME')
-
 ALTER STREAMLIT SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO ADD LIVE VERSION FROM LAST;
+-- then GRANT USAGE ON STREAMLIT … TO ROLE <r> for each --grant-usage role
 ```
 
-- `FROM` copies files **once** at create time. Later stage changes don't propagate
-  automatically.
+- `FROM` copies files **once** at create time: *"Files are copied only one time when the
+  CREATE command is executed; future changes to the source location don't automatically
+  update the Streamlit app."* So a redeploy is `CREATE OR REPLACE`, which the script does.
+  <https://docs.snowflake.com/en/sql-reference/sql/create-streamlit> (fetched 2026-09-27)
 - `ALTER STREAMLIT … ADD LIVE VERSION FROM LAST` is **required** before users with only
   `USAGE` can view it.
+- `CREATE OR REPLACE` makes a new object, so earlier grants on it are gone. Pass the
+  roles that should open the app with `--grant-usage` every time.
+- Alternative for small edits: `COPY FILES INTO '<live_version_location_uri>' FROM @stage
+  FILES = (...)`, where the URI comes from `DESCRIBE STREAMLIT`. For a warehouse runtime,
+  *"Current viewers must select Run to copy updates made to the source during their
+  session."* <https://docs.snowflake.com/en/developer-guide/streamlit/app-development/editing-your-app>
+  (fetched 2026-09-27)
 - `QUERY_WAREHOUSE` is required for the app to run.
 - `ROOT_LOCATION` is legacy. Don't use it.
-- The `snow` CLI path (`snowflake.yml`, CLI ≥ 3.14) also exists, but the CLI isn't
-  installed here.
+- Privileges: `CREATE STREAMLIT` (and `CREATE STAGE`) on schema `APP`, `USAGE` on `FORGE_WH`.
+- The `snow` CLI path (`snow streamlit deploy --replace`, CLI ≥ 3.14) also exists, but the
+  CLI isn't installed here.

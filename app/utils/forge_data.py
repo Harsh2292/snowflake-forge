@@ -74,17 +74,40 @@ def validate(metric_key: str, dimension=None) -> None:
         raise ValueError(f"{metric_key} cannot be broken down by {dimension} (contract §4 pairings)")
 
 
+def default_where(metric_key: str) -> str:
+    """Contract §3a / §5.1: the default time window of a metric (no period named)."""
+    if metric_key not in config.WINDOW_DATE:
+        return config.LATEST_SNAPSHOT
+    date = config.WINDOW_DATE[metric_key]
+    months = config.WINDOW_MONTHS
+    return (f"{date} > DATEADD(month, -{months}, CURRENT_DATE())\n"
+            f"    AND {date} <= CURRENT_DATE()")
+
+
+def _window_groups(keys) -> list[list[str]]:
+    """Metrics that share a default window, in contract order. One SEMANTIC_VIEW call per
+    group: one WHERE can't apply a ship-date and an order-date window at once (§5.1)."""
+    groups: dict[str, list[str]] = {}
+    for key in keys:
+        groups.setdefault(default_where(key), []).append(key)
+    return list(groups.values())
+
+
 def build_metric_sql(metric_keys, dimension=None) -> str:
-    """Contract §5.1 / §5.2 query for one or more metrics, optionally by one dimension."""
+    """Contract §5.1 / §5.2 query for one or more metrics that share a default window,
+    optionally by one dimension, with the §3a time rule applied."""
     keys = [metric_keys] if isinstance(metric_keys, str) else list(metric_keys)
     for key in keys:
         validate(key, dimension)
+    if len(_window_groups(keys)) > 1:
+        raise ValueError(f"{keys} have different default windows; query them separately (contract §5.1)")
     metric_ids = ",\n          ".join(config.METRICS[k]["id"] for k in keys)
+    where = default_where(keys[0])
     if dimension is None:
         return (f"SELECT * FROM SEMANTIC_VIEW(\n  {config.SEMANTIC_VIEW}\n"
-                f"  METRICS {metric_ids}\n)")
+                f"  METRICS {metric_ids}\n  WHERE {where}\n)")
     return (f"SELECT * FROM SEMANTIC_VIEW(\n  {config.SEMANTIC_VIEW}\n"
-            f"  DIMENSIONS {dimension}\n  METRICS {metric_ids}\n"
+            f"  DIMENSIONS {dimension}\n  METRICS {metric_ids}\n  WHERE {where}\n"
             f") ORDER BY {config.column_name(dimension).lower()}")
 
 
@@ -107,11 +130,12 @@ def build_agent_sql() -> str:
 NAIVE_OTD_SQL = (
     "SELECT COUNT_IF(s.ACT_DLV_DT <= o.ERDAT) / NULLIFZERO(COUNT_IF(s.ACT_DLV_DT IS NOT NULL))\n"
     "FROM SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK s\n"
-    "JOIN SUPPLY_CHAIN_FORGE.ERP_SOURCE.VBAK o ON s.VBELN = o.VBELN"
+    "JOIN SUPPLY_CHAIN_FORGE.ERP_SOURCE.VBAK o ON s.VBELN = o.VBELN\n"
+    "WHERE s.DPTBG > DATEADD(month, -12, CURRENT_DATE()) AND s.DPTBG <= CURRENT_DATE()"
 )
 
 QUALITY_SQL = (
-    "SELECT table_name, metric_name, argument_names, value, measurement_time\n"
+    "SELECT table_schema, table_name, metric_name, argument_names, value, measurement_time\n"
     "FROM SNOWFLAKE.LOCAL.DATA_QUALITY_MONITORING_RESULTS\n"
     f"WHERE table_database = '{config.DATABASE}'\n"
     "QUALIFY ROW_NUMBER() OVER (PARTITION BY reference_id ORDER BY measurement_time DESC) = 1\n"
@@ -121,6 +145,12 @@ QUALITY_SQL = (
 
 def build_call_sql(procedure_fqn: str) -> str:
     return f"CALL {procedure_fqn}()"
+
+
+# The agent's data-health tool (CR-006, DATA_SPEC §7.2); ENTITY is bound, never formatted in.
+DATA_HEALTH_SQL = f"CALL {config.DATA_HEALTH_PROC}(?)"
+HEALTH_ENTITIES = ["suppliers", "parts", "sourcing", "plants", "inventory", "customers",
+                   "orders", "order_lines", "shipments"]
 
 
 # ── Internals ────────────────────────────────────────────────────────────────
@@ -210,12 +240,9 @@ def get_all_metrics(role=None) -> pd.DataFrame:
     """All four canonical metrics as one row."""
 
     def live():
-        try:
-            df = _query(build_metric_sql(list(config.METRICS)))
-        except Exception:
-            # A combined query is expected to work (references/semantic_view_query.md §5);
-            # if it doesn't, query each metric separately.
-            df = pd.concat([_query(build_metric_sql(k)) for k in config.METRICS], axis=1)
+        # One call per default window (§5.1): OTD + landed cost, fill rate, days of inventory.
+        parts = [_query(build_metric_sql(group)) for group in _window_groups(config.METRICS)]
+        df = pd.concat(parts, axis=1)[_metric_columns()]
         return _numeric(df, _metric_columns())
 
     return _run("get_all_metrics", live, mock_data.all_metrics_frame)
@@ -311,19 +338,40 @@ def get_source_schema_summary() -> pd.DataFrame:
     return _tag(source_catalog.catalog(), data_mode())
 
 
-# DMF value expectations. FRESHNESS is informational: the demo data is loaded once, so
-# its age grows every day and a PASS/FAIL on it would show a false red on stage.
-_QUALITY_EXPECT_ZERO = {"NULL_COUNT", "DUPLICATE_COUNT", "DMF_ORPHAN_ORDER_LINES", "DMF_OVERSHIP_COUNT"}
+def get_data_health(entity: str = "ALL") -> dict:
+    """SEMANTIC.SP_DATA_HEALTH(entity): freshness, the as-of date and data-quality status,
+    in the DATA_SPEC §7.2 shape ({entity, as_of_date, status, summary, entities: [...]})."""
+    if entity != "ALL" and entity not in HEALTH_ENTITIES:
+        raise ValueError(f"Unknown entity {entity!r}; expected one of {HEALTH_ENTITIES} or ALL")
+
+    def live():
+        df = _query(DATA_HEALTH_SQL, params=[entity])
+        raw = df.iloc[0, 0] if not df.empty else None
+        data = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(data, dict):
+            raise RuntimeError("SP_DATA_HEALTH returned no JSON object")
+        return data
+
+    return _run("get_data_health", live, lambda: mock_data.data_health(entity))
+
+
+# DMF value expectations, judged by layer (DATA_SPEC §7.2): zero is expected only in the
+# cleaned data (CONFORMED, and the GOVERNED views on it). In the raw SOURCE schemas the
+# injected defects are real and expected, so those results are informational. FRESHNESS and
+# ROW_COUNT are informational everywhere: demo data is loaded once, so its age only grows.
+_QUALITY_EXPECT_ZERO = {"NULL_COUNT", "DUPLICATE_COUNT", "DMF_ORPHAN_ORDER_LINES", "DMF_ORPHAN_SHIPMENTS",
+                        "DMF_OVERSHIP_COUNT", "DMF_NEGATIVE_ON_HAND_COUNT", "DMF_TEST_RECORD_COUNT",
+                        "DMF_NONCONTRACT_CODE_COUNT"}
 
 
 def get_quality_results() -> pd.DataFrame:
-    """Latest result per DMF association. Columns: TABLE_NAME, METRIC_NAME,
+    """Latest result per DMF association. Columns: TABLE_SCHEMA, TABLE_NAME, METRIC_NAME,
     ARGUMENT_NAMES, VALUE, MEASUREMENT_TIME, STATUS (PASS / FAIL / INFO)."""
 
     def live():
         df = _query(QUALITY_SQL)
         if df.empty:
-            return pd.DataFrame(columns=["TABLE_NAME", "METRIC_NAME", "ARGUMENT_NAMES",
+            return pd.DataFrame(columns=["TABLE_SCHEMA", "TABLE_NAME", "METRIC_NAME", "ARGUMENT_NAMES",
                                          "VALUE", "MEASUREMENT_TIME"])
         df["ARGUMENT_NAMES"] = df["ARGUMENT_NAMES"].map(_join_json_list)
         return _numeric(df, ["VALUE"])
@@ -345,6 +393,8 @@ def _add_quality_status(df: pd.DataFrame) -> pd.DataFrame:
         name = str(row["METRIC_NAME"]).upper()
         if config.as_number(row["VALUE"]) is None:
             return "INFO"  # not measured yet: neither a pass nor a failure
+        if str(row.get("TABLE_SCHEMA", "")).upper().endswith("_SOURCE"):
+            return "INFO"  # raw data: defects are expected here and repaired downstream
         if name in _QUALITY_EXPECT_ZERO:
             return "PASS" if row["VALUE"] == 0 else "FAIL"
         return "INFO"

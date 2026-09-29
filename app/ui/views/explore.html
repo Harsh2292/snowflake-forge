@@ -56,7 +56,7 @@ function render(s) {
     </section>
     <section class="grid gap24" style="grid-template-columns:minmax(0,2.2fr) minmax(0,1fr);align-items:start">
       <article class="card stack gap12" style="padding:24px 28px">
-        <div class="row between" style="align-items:baseline"><span class="h3" style="font-size:19px">${esc(m.label)} ${esc(dim.label.toLowerCase())}</span>
+        <div class="row between" style="align-items:baseline"><span class="h3" style="font-size:19px">${esc(m.label)} ${esc(dim.label.toLowerCase())}<span class="small muted" style="font-weight:500"> · ${esc(m.window)}</span></span>
           <span class="small muted">${s.table ? '' : 'Click a bar for details'}</span></div>
         ${s.table ? table : chart}
         ${hasMissing ? `<span class="small muted">${MISSING} means no value: nothing in that group meets the definition${m.key === 'fill_rate' ? ' (fill rate leaves out open and cancelled orders)' : ''}.</span>` : ''}

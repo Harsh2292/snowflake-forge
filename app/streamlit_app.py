@@ -22,13 +22,13 @@ TOOLS = [("explore", "Explore metrics", ":material/bar_chart:"), ("health", "Dat
 
 # step -> (view file, payload builder, iframe height, next button (label, step) or None)
 VIEWS = {
-    "problem": ("problem", payloads.problem, 820, ("See how we fix it", "fix")),
-    "fix": ("fix", payloads.fix, 1120, ("Check every team gets the same number", "same")),
+    "problem": ("problem", payloads.problem, 850, ("See how we fix it", "fix")),
+    "fix": ("fix", payloads.fix, 1200, ("Check every team gets the same number", "same")),
     "same": ("same", payloads.same, 745, ("Ask your own question", "ask")),
     # Explore's height fits its tallest breakdown (12 plants); it has no button below it,
     # so spare space under shorter breakdowns is just page background.
     "explore": ("explore", payloads.explore, 990, None),
-    "health": ("health", payloads.health, 690, None),
+    "health": ("health", payloads.health, 1340, None),
 }
 
 
@@ -84,7 +84,12 @@ with tools:
             st.button(label, key=f"nav_{key}", icon=icon, on_click=go, args=(key,), width="stretch")
     with cols[2]:
         st.toggle("Dark", key="dark")
-html(f'<div style="height:1px;background:{t["line"]};margin:6px 0 24px"></div>')
+html(f'<div style="height:1px;background:{t["line"]};margin:6px 0 8px"></div>')
+# Contract §3a: every number covers a stated window, and the data's as-of date is shown.
+as_of = payloads.as_of(forge_data.data_mode())
+html(f'<div class="sf-asof" style="text-align:right;font-size:13px;color:{t["muted"]};margin:0 0 14px">'
+     f'{"Data as of " + esc(as_of) + " · " if as_of else ""}Metrics cover the last 12 months unless stated;'
+     f' days of inventory uses the latest snapshot</div>')
 
 # ── The current screen ───────────────────────────────────────────────────────
 if step == "ask":

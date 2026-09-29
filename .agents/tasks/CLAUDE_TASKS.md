@@ -3,8 +3,9 @@
 > **Replanned 2026-09-29 (user-approved)** by CoCo, with the user's permission to edit this
 > file once. Claude Code owns it from here on.
 >
-> **Progress:** C01 ✅ · C02 ✅ · C03 ✅ · C04 ✅ · C07 ✅ · C6a ✅. Remaining, in order:
-> **C09 → C08 → C10 → C11 → C6b → C12 → C6c → C13 → C05 → C14 (stretch)**. Live status is
+> **Progress:** C01 ✅ · C02 ✅ · C03 ✅ · C04 ✅ · C07 ✅ · C6a ✅ · C09 ✅ · C08 ✅ READY
+> (handoff lock, waiting for CoCo's B08c run). Remaining, in order:
+> **C10 → C11 → C6b → C12 → C6c → C13 → C05 → C14 (stretch)**. Live status is
 > in `.agents/NEXT.md`; each track's detail goes in its card under `.agents/tasks/claude/`
 > (write the card at planning time, before building, as always).
 >

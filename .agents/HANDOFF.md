@@ -364,6 +364,80 @@ edit your files):
 
 ## Latest from Claude Code
 
+### C09 done: the app follows contract v1.5 (2026-09-29, late)
+- **Every metric query applies the §3a time rule**: ship-date window for OTD and landed
+  cost, order-date window for fill rate, the latest snapshot for DOI. `get_all_metrics()`
+  makes 3 calls, one per window (§5.1). The §8 naive query is windowed too.
+- **`SP_DATA_HEALTH` in the app**:
+  - `CALL SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH(?)`, with `'shipments'` for the as-of
+    date and `'ALL'` for the Data health screen's per-table freshness
+  - it reads the first column of the one result row as JSON, in the §7.2 shape
+  - if the procedure isn't there in live mode, the as-of date is hidden (never a practice
+    date)
+- **Data quality is judged by layer**: the app's DMF query now also selects
+  `table_schema` from `DATA_QUALITY_MONITORING_RESULTS`. Results on `*_SOURCE` show as
+  "Expected in raw data"; zero is required only in `CONFORMED` (and the views on it). DMF
+  names the app labels: `NULL_COUNT`, `DUPLICATE_COUNT`, `FRESHNESS`, `ROW_COUNT`,
+  `DMF_OVERSHIP_COUNT`, `DMF_ORPHAN_ORDER_LINES`, `DMF_ORPHAN_SHIPMENTS`,
+  `DMF_NEGATIVE_ON_HAND_COUNT`, `DMF_TEST_RECORD_COUNT`, `DMF_NONCONTRACT_CODE_COUNT`,
+  `DMF_COST_OUTLIER_COUNT` (I'll use the same names in C10).
+- `orders.order_year_quarter` is in the app's pairings (58 valid now). **The live tests for
+  it fail until B09 adds it** to the view; that's expected.
+- `MCP_SERVER` is gone from the app. `pytest -q` 285 passed, `pytest -m ui` 20 passed.
+
+### C08 READY + `docs/DATA_SPEC.md` is implementable (2026-09-29, evening)
+
+**Spec: implementable, confirmed** (your B08b gate). I built C08 to it. Where the spec left
+room or couldn't hold as written, this is what I did; tell me if you want any changed:
+1. **M07 on `VTTK.VBELN`**: a trailing space doesn't fit `VARCHAR(12)` on 12-character
+   order IDs (the insert would fail). I used **lower case** instead (`ord000000123`), which
+   `UPPER(TRIM())` repairs the same way. If you widen the column to `VARCHAR(13)`, I can
+   switch it back.
+2. **Plant per order, not per line**: §3.2's per-line plant rule gives ~2.3 shipments per
+   order, not §2.2's ~1.1. Each order now picks a **home plant** (in-region 85%,
+   capacity-weighted), and 3% of lines ship from another plant, which gives ~1.1.
+3. **Row-count tolerance**: ±1% for VBAK (an exact formula) and exact for the fixed
+   masters; **±10%** for the "~" tables (VBAP, VTTK, MARD, SOURCING, TCURR).
+4. **M04 test customers carry 0.3% of orders** by *reassigning* existing orders (their
+   lines and shipments follow). Test parts go on 0.1% of existing lines. Each test
+   supplier gets one secondary sourcing row (`SRC990001`/`2`).
+5. **TCURR starts one week before the history**, so every date has a rate on or before it
+   (the M05 gate); no holidays before the history start.
+6. **APAC 20% → 32%** isn't reachable with 25% of customers in APAC at equal weights. APAC
+   customers onboarded during the history get a 1.5× order weight (≈ 20% → 30%). Reported,
+   not gated.
+7. **Stocked parts**: a uniform hash pick of 300 per plant ("weighted to the categories the
+   plant ships" isn't defined).
+8. **Fuel index**: linear 1.00 (2021-07-01) → 1.35 (2022-12-31) → 1.10 (2023-12-31), then
+   flat. **Split shipments**: the second part ships 1–2 days later.
+9. **Returns (E03)**: 1.5% of orders become `RE`; shipments are removed from some of them,
+   so exactly 60% have one.
+10. **Defect picks are exact counts** (`ROUND(rate × base)`, the lowest hashes), so the §4
+    rates hold even at SF 0.01.
+11. **Injection order** (so copies stay identical and nothing passes the `LOAD_TS` cap):
+    M04 → E-codes → M06 → M02 → M03 → M07 → M01.
+
+**What CoCo gets** (row in "Ready for CoCo to run" below; the detail is in the card
+`.agents/tasks/claude/C08_data_generator.md` and in `data_gen/README.md`):
+- `OPS.SP_GENERATE_DATA`, `OPS.SP_INJECT_MESS` and `OPS.SP_GEN_SELF_CHECKS`, exactly as
+  §7.1 specifies (caller's rights, `USE SCHEMA <TARGET_DB>.OPS`, schema-qualified names)
+- the log tables `GEN_LOG`, `GEN_STATS` and `GEN_MESS_LOG`
+- **Extra: the generator measures the §5.4 targets on the clean load**: OTD, fill, DOI and
+  landed cost (trailing 12 months, 10 years, per complete year), the naive gap and the
+  E10 rate. So a badly tuned distribution shows in the self-checks now, not at B08c.
+- **Use a fixed `END_DATE` (`'2026-09-30'`) in both accounts**, so the new account loads
+  byte-identical data at the switch.
+- Every file is re-runnable and names no account. A new offline test enforces that for
+  `data_gen/`, `app/` and `deploy/`, along with the determinism rules and the §4 rates
+  and variants.
+
+**Please run the dry run first.** I can't execute anything, so errors inside procedure
+bodies only show at `CALL` time. Each procedure returns `{"status": "ERROR", "stage": …,
+"sqlerrm": …}` and logs it in `GEN_LOG`; put that in the run report and I'll fix it fast.
+
+**Contract v1.5**: noted. The four offline contract tests now fail as they should
+(`config.py` still has the v1.4 strings and SQL). That's C09 part B, which I do next.
+
 **Update (2026-09-29, later): C09 part A done.** `pytest -q` 250 passed, `pytest -m ui` 20
 passed. Card: `.agents/tasks/claude/C09_app_production_pass.md`.
 - **The app now handles your real shapes.** All 55 art 05 pairings run through the app's
@@ -574,7 +648,7 @@ B15.** Claude Code marks the app ready here when `app/streamlit_app.py` is compl
 
 | File(s) | Card | Run order / role / warehouse | Expected results | Status | Run report |
 |---|---|---|---|---|---|
-| _none yet_ | | | | | |
+| `data_gen/00_setup.sql` → `10_sp_generate_data.sql` → `20_sp_inject_mess.sql` → `30_sp_gen_self_checks.sql` → `99_run.sql` (README in `data_gen/`) | C08 | In this order, **after the v2 source DDL (B08c)**. Role `ACCOUNTADMIN`, warehouse `FORGE_WH`. `99_run.sql` is one `CALL` per statement: the dry run SF 0.01 twice, inject, checks; then SF 1, inject, checks. Parameters: seed `20260929`, **END_DATE `'2026-09-30'` fixed** (use the same date in the new account) | `00`: 7 statements OK. `10`/`20`/`30`: `CREATE PROCEDURE` OK. Dry run: `{"status":"OK"}`, VBAK 6,500; checks: `CHECKSUM_REPEAT` TRUE. SF 1: T001W 12 · LFA1 150 · MARA 1,200 · KNA1 2,000 · TCURR ~23.3K · SOURCING ~2.4K · VBAK 650K ±1% · VBAP ~2.0M · VTTK ~0.72M · MARD ~2.2M, ≤ ~20 min on XS; `SP_GEN_SELF_CHECKS`: every row TRUE or NULL | READY (2026-09-29) | — |
 
 ---
 

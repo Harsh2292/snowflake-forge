@@ -4,7 +4,7 @@ const D = DATA;
 function row(c, last) {
   const mark = c.status === 'INFO' ? icon('info', 24, 'var(--muted)')
     : icon(c.status === 'PASS' ? 'check' : 'cross', 24, c.status === 'PASS' ? 'var(--good)' : 'var(--critical)');
-  const word = c.status === 'INFO' ? 'For information' : c.status === 'PASS' ? 'Passing' : 'Failing';
+  const word = c.note ? c.note : c.status === 'INFO' ? 'For information' : c.status === 'PASS' ? 'Passing' : 'Failing';
   return `<div style="display:grid;grid-template-columns:32px minmax(0,1fr) 240px 150px;align-items:center;gap:16px;padding:18px 0;${last ? '' : 'border-bottom:1px solid var(--line)'}">
     ${mark}
     <span class="stack" style="gap:3px"><span style="font-size:17px;font-weight:600">${esc(c.name)}</span><span class="small muted">${esc(c.tech)}</span></span>
@@ -28,7 +28,22 @@ function render() {
       <span class="small ink2" style="font-size:15px">Last checked ${esc(D.checked)}</span>
     </section>
     <section class="card" style="padding:6px 28px">${D.checks.map((c, i) => row(c, i === D.checks.length - 1)).join('')}</section>
+    ${tables()}
   </div>`;
+}
+
+/* Per-table freshness from SP_DATA_HEALTH (the agent's data-health tool). */
+function tables() {
+  if (!D.tables || !D.tables.length) return '';
+  const tone = (s) => s === 'OK' ? 'var(--good)' : s === 'FAIL' ? 'var(--critical)' : 'var(--muted)';
+  return `<section class="card stack gap12" style="padding:22px 28px">
+      <div class="row between" style="align-items:baseline;gap:16px;flex-wrap:wrap"><span class="h3">Freshness by table</span>
+        <span class="small muted">${esc(D.summary)}${D.tables_practice ? ' (practice values)' : ''}</span></div>
+      <table class="tbl"><thead><tr><th>Table</th><th class="n">Rows</th><th>Latest data</th><th>Freshness</th><th>Status</th></tr></thead>
+      <tbody>${D.tables.map((t) => `<tr><td>${esc(t.name)}</td><td class="n">${esc(t.rows)}</td><td>${esc(t.latest)}</td>
+        <td style="color:${tone(t.freshness)};font-weight:600">${esc(t.freshness)}</td>
+        <td style="color:${tone(t.status)};font-weight:600">${esc(t.status)}</td></tr>`).join('')}</tbody></table>
+    </section>`;
 }
 mount(render, {});
 </script>

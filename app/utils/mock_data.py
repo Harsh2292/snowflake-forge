@@ -27,6 +27,7 @@ _SYNTHETIC_VALUES = {
     "parts.is_critical": [True, False],
     "orders.order_month": [f"{2025 + (9 + i) // 12}-{(9 + i) % 12 + 1:02d}" for i in range(12)],
     "orders.order_year": [2025, 2026],
+    "orders.order_year_quarter": ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"],
     "shipments.carrier": [f"MOCK-CARRIER-{c}" for c in "ABCDE"],
     "orders.order_date": [_END - timedelta(days=i) for i in range(29, -1, -1)],
     "shipments.ship_date": [_END - timedelta(days=i) for i in range(29, -1, -1)],
@@ -127,19 +128,52 @@ def masking_sample(persona: str) -> pd.DataFrame:
 
 
 def quality_results() -> pd.DataFrame:
-    """DMFs from LLD §5.4 / GAPS_RESOLVED GAP-3, all healthy."""
+    """DMF results by layer (DATA_SPEC §7.2): the raw SOURCE tables carry the injected
+    defects on purpose; the cleaned CONFORMED tables must show zero."""
     measured = pd.Timestamp("2026-09-01 06:00:00")
     rows = [
-        ("V_SHIPMENT", "NULL_COUNT", "promised_delivery_date", 0),
-        ("V_ORDER_LINE", "DUPLICATE_COUNT", "line_id", 0),
-        ("V_INVENTORY", "FRESHNESS", "snapshot_date", 3600),
-        ("V_ORDER_LINE", "DMF_ORPHAN_ORDER_LINES", "order_id", 0),
-        ("V_ORDER_LINE", "DMF_OVERSHIP_COUNT", "quantity_ordered, quantity_shipped", 0),
+        ("CONFORMED", "SHIPMENT", "NULL_COUNT", "promised_delivery_date", 0),
+        ("CONFORMED", "ORDER_LINE", "DUPLICATE_COUNT", "line_id", 0),
+        ("CONFORMED", "INVENTORY", "FRESHNESS", "load_ts", 3600),
+        ("CONFORMED", "ORDER_LINE", "DMF_ORPHAN_ORDER_LINES", "order_id", 0),
+        ("CONFORMED", "ORDER_LINE", "DMF_OVERSHIP_COUNT", "quantity_ordered, quantity_shipped", 0),
+        ("ERP_SOURCE", "VBAP", "DUPLICATE_COUNT", "LINE_ID", 29870),
+        ("TMS_SOURCE", "VTTK", "NULL_COUNT", "PROM_DLV_DT", 5712),
     ]
     return pd.DataFrame(
-        [{"TABLE_NAME": t, "METRIC_NAME": m, "ARGUMENT_NAMES": a, "VALUE": v,
-          "MEASUREMENT_TIME": measured} for t, m, a, v in rows]
+        [{"TABLE_SCHEMA": sc, "TABLE_NAME": t, "METRIC_NAME": m, "ARGUMENT_NAMES": a, "VALUE": v,
+          "MEASUREMENT_TIME": measured} for sc, t, m, a, v in rows]
     )
+
+
+# Practice SP_DATA_HEALTH output (DATA_SPEC §7.2 shape). The as-of date is the latest
+# business date loaded; the real procedure reports it at B12 (C10).
+MOCK_AS_OF = "2026-09-29"
+_HEALTH_ROWS = {  # entity: (CONFORMED table, rows at SF 1)
+    "suppliers": ("SUPPLIER", 150), "parts": ("PART", 1200), "sourcing": ("SOURCING", 2400),
+    "plants": ("PLANT", 12), "inventory": ("INVENTORY", 2160000), "customers": ("CUSTOMER", 2000),
+    "orders": ("SALES_ORDER", 636000), "order_lines": ("ORDER_LINE", 1980000), "shipments": ("SHIPMENT", 705000),
+}
+
+
+def data_health(entity: str = "ALL") -> dict:
+    names = list(_HEALTH_ROWS) if entity == "ALL" else [entity]
+    entities = []
+    for name in names:
+        table, count = _HEALTH_ROWS[name]
+        checks = []
+        if name == "shipments":
+            checks.append({"check": "missing_promised_date", "code": "E01", "layer": "SOURCE",
+                           "dmf": "SNOWFLAKE.CORE.NULL_COUNT", "table": "SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK",
+                           "columns": ["PROM_DLV_DT"], "value": 5712, "rate": 0.0079, "threshold_rate": 0.016,
+                           "status": "OK", "handled_by": "Excluded from on-time delivery",
+                           "measured_at": "2026-09-30T06:00:00Z"})
+        entities.append({"entity": name, "table": f"SUPPLY_CHAIN_FORGE.CONFORMED.{table}", "row_count": count,
+                         "latest_business_date": MOCK_AS_OF, "latest_load_ts": "2026-09-30T02:41:00",
+                         "freshness_hours": 5.3, "freshness_status": "OK", "status": "OK", "checks": checks})
+    return {"entity": entity, "generated_at": "2026-09-30T08:00:00Z", "as_of_date": MOCK_AS_OF, "status": "OK",
+            "summary": "Every table is fresh; edge cases are handled and no repairable defects are left.",
+            "entities": entities}
 
 
 # ── Mock agent ───────────────────────────────────────────────────────────────

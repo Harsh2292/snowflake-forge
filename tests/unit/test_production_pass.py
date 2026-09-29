@@ -110,6 +110,32 @@ def test_answer_chart_keeps_a_null_value_as_missing():
     assert [r["value"] for r in data["chart"]["rows"]] == [0.92, None]
 
 
+# ── As-of date and time window (contract §3a) ────────────────────────────────
+
+def test_every_screen_states_the_window_and_the_as_of_date():
+    from streamlit.testing.v1 import AppTest
+    for step in ["problem", "same", "explore", "health", "ask"]:
+        at = AppTest.from_file(str(APP / "streamlit_app.py"), default_timeout=30)
+        at.session_state["step"] = step
+        at.run()
+        line = next(m.value for m in at.markdown if "sf-asof" in m.value)
+        assert "Data as of 29 Sep 2026" in line and "last 12 months" in line, step
+
+
+def test_a_practice_as_of_date_is_never_shown_as_live(monkeypatch):
+    monkeypatch.setattr(config, "USE_MOCK_DATA", False)
+    monkeypatch.setattr(forge_data, "_session", None)
+    monkeypatch.delenv("SNOWFLAKE_CONNECTION_NAME", raising=False)
+    assert payloads.as_of("live") == ""
+    assert payloads.as_of("mock") == "29 Sep 2026"
+
+
+def test_explore_labels_each_metric_with_its_window():
+    windows = {m["key"]: m["window"] for m in payloads.explore("mock")["metrics"]}
+    assert windows == {"on_time_delivery_rate": "last 12 months", "fill_rate": "last 12 months",
+                       "days_of_inventory": "latest snapshot", "avg_landed_cost": "last 12 months"}
+
+
 # ── Dependencies ─────────────────────────────────────────────────────────────
 
 def test_environment_yml_and_requirements_pin_the_same_streamlit():

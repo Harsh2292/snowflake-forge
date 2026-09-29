@@ -7,7 +7,7 @@
 | **Prerequisite** | C03 ✅, C04 ✅, C6a ✅. Part B needs `docs/DATA_SPEC.md` + CR-006 (CoCo B08b) |
 | **Est. effort** | Part A: one session. Part B: under an hour once the spec lands |
 | **Writes** | `app/ui/payloads.py`, `app/ui/views/{base.js,explore.html,same.html,answer.html,problem.html}`, `app/utils/{forge_data.py,agent_response.py,mock_data.py,config.py}`, `app/streamlit_app.py`, `tests/conftest.py`, `tests/unit/*`, `tests/artifacts/test_replay_live.py` (new), `tests/ui/test_browser.py` |
-| **Status** | 🔄 **Part A DONE** 2026-09-29 (approved the same day): `pytest -q` 250 passed, `pytest -m ui` 20 passed. **Part B waits for `docs/DATA_SPEC.md` + CR-006.** See **Result** |
+| **Status** | ✅ **DONE** 2026-09-29: part A and part B (contract v1.5). `pytest -q` 285 passed, `pytest -m ui` 20 passed. See **Result** (part A) and **Result — Part B** |
 
 ---
 
@@ -152,6 +152,53 @@ Not in scope:
 
 **Not done yet (part B):** the as-of date, `SP_DATA_HEALTH` on Data health, removing
 `MCP_SERVER`.
+
+---
+
+## Result — Part B (2026-09-29, contract v1.5)
+
+**Gate: passed.** `pytest -q` **285 passed** (116 live skips). `pytest -m ui` **20 passed**.
+The as-of line and the Data health tables were checked in screenshots, light and dark.
+
+- **§3 definitions**: `config.METRICS` is copied from contract v1.5 word for word, and the
+  existing test compares it with the contract's own block.
+- **§3a time rule in every metric query**:
+  - `forge_data.default_where()` adds the ship-date window for OTD and landed cost, the
+    order-date window for fill rate, and the latest snapshot for days of inventory
+  - `build_metric_sql()` refuses to mix windows; `get_all_metrics()` makes one call per
+    window (3)
+  - the §5.1, §5.2 and §8 contract tests pass again
+- **§8 naive OTD** has the same 12-month window.
+- **§4**: `orders.order_year_quarter` added. The valid pairings go from 55 to **58**, the
+  refused days-of-inventory pairings from 9 to 10. The practice data has `2025-Q4` …
+  `2026-Q3`.
+- **§1 / CR-006**: `MCP_SERVER` removed; `DATA_HEALTH_PROC` added.
+- **`SP_DATA_HEALTH`**:
+  - `forge_data.get_data_health(entity)` calls `CALL …SP_DATA_HEALTH(?)` with the entity
+    bound; unknown entities are refused; the practice data mirrors the DATA_SPEC §7.2
+    shape
+  - **the as-of date** is on every screen: "Data as of 29 Sep 2026 · Metrics cover the last
+    12 months unless stated; days of inventory uses the latest snapshot". In live mode, if
+    the procedure isn't reachable, **the date is hidden**, so a practice date is never shown
+    as live.
+  - **Data health** adds a "Freshness by table" section (rows, latest data, freshness,
+    status per table).
+- **Data quality judged by layer** (DATA_SPEC §7.2): `QUALITY_SQL` reads `table_schema`.
+  Results on `*_SOURCE` are informational ("Expected in raw data"); zero is required only
+  in the cleaned data. New DMF names are labelled in plain words.
+- **Explore**: each chart title states its window ("· last 12 months" / "· latest snapshot").
+- **Source catalog**: 10 tables (`TCURR` and the currency columns added, not exposed
+  downstream).
+- **Frame heights**: Problem 850, Fix 1200, Data health 1340. The longer definitions and
+  the new sections grew them; the browser layout checks caught all three.
+- **Tests added**: time rule per metric (and against the §5.1 table), no mixed windows, one
+  call per window, the §7.2 shape, quality by layer, the as-of date on every screen and
+  hidden in live without the procedure, window labels. The replay session now serves the
+  per-window queries.
+
+Still depends on CoCo:
+- `SP_DATA_HEALTH` exists at B12 (C10 writes it)
+- the §10 practice numbers change at B09 → C6b
 
 ---
 

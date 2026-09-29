@@ -68,7 +68,8 @@ class ReplaySession:
     date, NULL as None. Any other statement raises, as it would if the object didn't exist.
 
     - art 04: the §5.4 sample calls (SP_SAMPLE_AS_*)
-    - art 05: every §5.1/§5.2 SEMANTIC_VIEW query, rows in the captured (unsorted) order,
+    - art 05: every §5.1/§5.2 SEMANTIC_VIEW query (as the app builds it today, windows
+      included; the v1 capture itself had no window), rows in the captured order,
       plus SP_METRICS_AS_* built from its overall values as NUMBER(38,6). That last part is
       a stand-in until art 09 captures the procedures themselves.
     """
@@ -90,8 +91,9 @@ class ReplaySession:
         for key in config.METRICS:
             col = config.column_name(config.METRICS[key]["id"])
             self.results[forge_data.build_metric_sql(key)] = [{col: _number(overall[col])}]
-        self.results[forge_data.build_metric_sql(list(config.METRICS))] = [
-            {col: _number(overall[col]) for col in columns}]
+        for group in forge_data._window_groups(config.METRICS):  # get_all_metrics: one call per window
+            cols = [config.column_name(config.METRICS[k]["id"]) for k in group]
+            self.results[forge_data.build_metric_sql(group)] = [{col: _number(overall[col]) for col in cols}]
         for metric_id, dims in payload["by_dimension"].items():
             key, metric_col = by_id[metric_id], config.column_name(metric_id)
             for dimension, rows in dims.items():

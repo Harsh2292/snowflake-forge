@@ -38,7 +38,7 @@ WHY_NOT = {  # why a breakdown is impossible (contract §4 pairings), in words
 
 SYSTEMS = [
     {"code": "ERP", "name": "Enterprise resource planning (e.g. SAP)", "team": "Sales & planning",
-     "holds": ["Sales orders", "Customers", "Order lines"], "column": "ERDAT", "means": "Its own “promised” date"},
+     "holds": ["Sales orders", "Customers", "Order lines", "Exchange rates"], "column": "ERDAT", "means": "Its own “promised” date"},
     {"code": "WMS", "name": "Warehouse management", "team": "Warehouses",
      "holds": ["Plant inventory snapshots", "Daily usage"], "column": "LABST", "means": "Stock on hand"},
     {"code": "TMS", "name": "Transport management", "team": "Logistics",
@@ -72,6 +72,7 @@ def metrics_meta() -> list[dict]:
         value = _num(head[_metric_col(key)])
         out.append({"key": key, "label": m["label"], "format": m["format"], "definition": m["definition"],
                     "id": m["id"], "formula": FORMULAS[key], "unit": UNITS.get(key, ""), "overall": value,
+                    "window": config.WINDOW_LABEL[key],
                     "display": config.format_value(key, value) + (f" {UNITS[key]}" if key in UNITS else "")})
     return out
 
@@ -182,12 +183,19 @@ def explore(mode: str) -> dict:
 
 
 PLAIN_CHECKS = {
-    "NULL_COUNT": ("Every shipment has a promised date", "missing"),
-    "DUPLICATE_COUNT": ("No duplicate order lines", "duplicates"),
+    "NULL_COUNT": ("No missing promised dates", "missing"),
+    "DUPLICATE_COUNT": ("No duplicate records", "duplicates"),
     "DMF_ORPHAN_ORDER_LINES": ("Every order line belongs to an order", "orphaned lines"),
+    "DMF_ORPHAN_SHIPMENTS": ("Every shipment belongs to an order", "orphaned shipments"),
     "DMF_OVERSHIP_COUNT": ("Nothing shipped beyond what was ordered", "over-shipped lines"),
-    "FRESHNESS": ("Inventory snapshot age", None),
+    "DMF_NEGATIVE_ON_HAND_COUNT": ("No negative stock", "negative stock rows"),
+    "DMF_TEST_RECORD_COUNT": ("No test records", "test records"),
+    "DMF_NONCONTRACT_CODE_COUNT": ("Every code is a standard value", "non-standard codes"),
+    "DMF_COST_OUTLIER_COUNT": ("Implausible costs set aside", "outliers"),
+    "ROW_COUNT": ("Rows loaded", "rows"),
+    "FRESHNESS": ("Data age", None),
 }
+RAW_NOTE = "Expected in raw data"
 
 
 def _age(seconds: float) -> str:
@@ -206,18 +214,56 @@ def health(mode: str) -> dict:
         return {"checks": [], "passing": 0, "scored": 0, "checked": ""}
     checks = []
     for r in df.itertuples():
-        name, unit = PLAIN_CHECKS.get(str(r.METRIC_NAME).upper(), (str(r.METRIC_NAME), "problems"))
+        metric = str(r.METRIC_NAME).upper()
+        name, unit = PLAIN_CHECKS.get(metric, (str(r.METRIC_NAME), "problems"))
+        schema = str(getattr(r, "TABLE_SCHEMA", "") or "")
+        raw = schema.upper().endswith("_SOURCE")
         value = _num(r.VALUE)
         if value is None:
             result = "Not measured yet"
+        elif metric == "FRESHNESS":
+            result = _age(value)
         else:
-            result = _age(value) if r.STATUS == "INFO" else f"{int(value)} {unit}"
-        checks.append({"name": name, "tech": f"{r.METRIC_NAME} on {r.TABLE_NAME}.{r.ARGUMENT_NAMES}",
-                       "result": result, "status": r.STATUS})
+            result = f"{int(value):,} {unit}"
+        where = f"{schema}.{r.TABLE_NAME}" if schema else str(r.TABLE_NAME)
+        checks.append({"name": f"Raw data: {unit}, repaired before use" if raw and unit else name,
+                       "tech": f"{r.METRIC_NAME} on {where}.{r.ARGUMENT_NAMES}",
+                       "result": result, "status": r.STATUS, "note": RAW_NOTE if raw else ""})
     scored = df[df["STATUS"] != "INFO"]
     checked = pd.to_datetime(df["MEASUREMENT_TIME"]).max()
     return {"checks": checks, "passing": int((scored["STATUS"] == "PASS").sum()), "scored": len(scored),
-            "checked": f"{checked:%d %b %Y, %H:%M}"}
+            "checked": f"{checked:%d %b %Y, %H:%M}", **_tables_health()}
+
+
+def _tables_health() -> dict:
+    """Per-table freshness and status from SP_DATA_HEALTH('ALL') (DATA_SPEC §7.2)."""
+    data = forge_data.get_data_health("ALL")
+    tables = [{"name": str(e.get("entity", "")).replace("_", " ").capitalize(),
+               "rows": f"{int(e['row_count']):,}" if _num(e.get("row_count")) is not None else config.MISSING,
+               "latest": e.get("latest_business_date") or config.MISSING,
+               "freshness": e.get("freshness_status") or "UNKNOWN",
+               "status": e.get("status") or "UNKNOWN"} for e in data.get("entities") or []]
+    return {"tables": tables, "summary": data.get("summary") or "", "overall": data.get("status") or "UNKNOWN",
+            "tables_practice": data.get("source") != "live"}
+
+
+def _date_label(value) -> str:
+    try:
+        return f"{pd.Timestamp(value):%d %b %Y}"
+    except (TypeError, ValueError):
+        return ""
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def as_of(mode: str) -> str:
+    """The as-of date shown with every metric (contract §3a): the latest business date
+    loaded, from SP_DATA_HEALTH. Empty in live mode if the procedure isn't reachable, so a
+    practice date is never shown as a live one."""
+    data = forge_data.get_data_health("shipments")
+    forge_data.pop_notices()  # its absence is shown by the missing date, not a toast
+    if mode == "live" and data.get("source") != "live":
+        return ""
+    return _date_label(data.get("as_of_date"))
 
 
 def _chart_window(label_col: str, rows: list[dict]) -> list[dict]:

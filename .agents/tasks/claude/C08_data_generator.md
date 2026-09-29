@@ -6,7 +6,7 @@
 | **Milestone** | M3, replan Day 1 (29 Sep): **critical path**, READY by the end of the day |
 | **Prerequisite** | `docs/DATA_SPEC.md` (B08b ✅), CR-006 ✅ (contract v1.5). CoCo's B08c creates the v2 source tables and schema `OPS` before running this |
 | **Writes** | `data_gen/00_setup.sql`, `10_sp_generate_data.sql`, `20_sp_inject_mess.sql`, `30_sp_gen_self_checks.sql`, `99_run.sql`, `README.md`; `tests/unit/test_data_gen_sql.py` |
-| **Status** | 🔄 building 2026-09-29 (the user asked to plan and build it in one go) |
+| **Status** | ✅ **READY** 2026-09-29: handed to CoCo (HANDOFF "Ready for CoCo to run"). Offline gate green (`tests/unit/test_data_gen_sql.py`, 23 checks). The live gate is CoCo's run report `docs/artifacts/runs/C08_run.md` |
 
 ---
 

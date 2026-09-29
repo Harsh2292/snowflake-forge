@@ -45,6 +45,7 @@ def test_days_of_inventory_by_orders_or_shipments_is_refused(forge, dimension):
 
 
 def test_every_pairing_is_covered():
-    """55 guaranteed pairings (§4 with entity.* expanded), 9 refused."""
-    assert len(VALID) == 55
-    assert len(INVALID_DOI) == 9
+    """58 guaranteed pairings (§4 with entity.* expanded; v1.5 adds orders.order_year_quarter
+    for OTD, fill rate and landed cost), 10 refused for days of inventory."""
+    assert len(VALID) == 58
+    assert len(INVALID_DOI) == 10

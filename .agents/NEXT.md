@@ -44,7 +44,7 @@ Then **B09** (semantic view v2) and **B09a** (generator + name search) on today'
 
 ---
 
-## Claude Code → `C08` the moment `docs/DATA_SPEC.md` lands (critical path), then `C10`, `C11`; C09 part B with them
+## Claude Code → C08 ✅ READY (handoff lock) · C09 ✅ · next: `C10` (data-quality SQL + `SP_DATA_HEALTH`), then `C11`
 
 Queue and full detail: `.agents/tasks/CLAUDE_TASKS.md` (replanned 2026-09-29). Claude
 Code **writes Snowflake SQL, CoCo runs it** (the handoff lock). Write each card before
@@ -135,8 +135,8 @@ Removed on 2026-09-29: B07c and the old B14 (MCP dropped), B11 (merged into B09)
 | C04 | Test suite | ✅ |
 | C07 | CI tests on GitHub + one-command deploy script | ✅ |
 | C6a | Reconcile governed layer | ✅ art 03/04: 0 mismatches (re-check after B08c) |
-| C09 | App production pass (Day 1–2) | 🔄 part A ✅ 29 Sep (250 + 20 UI tests); part B (as-of date, `SP_DATA_HEALTH`, MCP) waits for the spec |
-| C08 | Realistic data generator in `data_gen/` (Day 1, critical path) | ⬜ unblocked: `docs/DATA_SPEC.md` landed |
+| C09 | App production pass (Day 1–2) | ✅ 29 Sep: part A + part B (contract v1.5: time rule, as-of date, data health, MCP removed); 285 + 20 UI tests |
+| C08 | Realistic data generator in `data_gen/` (Day 1, critical path) | ✅ READY 29 Sep: in the handoff lock for CoCo (dry run first); spec confirmed implementable |
 | C10 | Data-quality SQL + `SP_DATA_HEALTH` in `quality/` (Day 1–2) | ⬜ unblocked (DATA_SPEC §7.2) |
 | C11 | Evaluation set + runner in `eval/` (Day 1–2) | ⬜ unblocked (DATA_SPEC §7.3) |
 | C6b | Reconcile semantic layer (Day 2) | 🔒 wait for the re-captured art 05/06 (B09) |

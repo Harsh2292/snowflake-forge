@@ -8,6 +8,7 @@ tested once, in mock and live variants, under tests/consistency, governance and 
 import re
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from utils import agent_response, config, forge_data
@@ -170,8 +171,8 @@ def test_divergence_numbers_differ():
 def test_source_catalog_covers_four_systems_and_the_date_conflict():
     df = forge_data.get_source_schema_summary()
     assert set(df["SYSTEM"]) == {"ERP", "WMS", "TMS", "SRM"}
-    # LLD §2 defines 9 tables (HANDOFF says "10 source tables"; flagged to CoCo for B03).
-    assert df["SOURCE_TABLE"].nunique() == 9
+    # DATA_SPEC §1 / contract v1.5: 10 source tables (ERP_SOURCE.TCURR added, FX rates).
+    assert df["SOURCE_TABLE"].nunique() == 10
     conflict = df[df["FLAG"] == "CONFLICT"]
     assert set(conflict["SOURCE_COLUMN"]) == {"ERDAT", "PROM_DLV_DT"}
 
@@ -179,7 +180,9 @@ def test_source_catalog_covers_four_systems_and_the_date_conflict():
 def test_quality_results_have_status():
     df = forge_data.get_quality_results()
     assert set(df["STATUS"]) <= {"PASS", "FAIL", "INFO"}
-    assert (df.loc[df["METRIC_NAME"] != "FRESHNESS", "STATUS"] == "PASS").all()
+    cleaned = df[(df["TABLE_SCHEMA"] == "CONFORMED") & (df["METRIC_NAME"] != "FRESHNESS")]
+    assert len(cleaned) and (cleaned["STATUS"] == "PASS").all()
+    assert (df.loc[df["TABLE_SCHEMA"].str.endswith("_SOURCE"), "STATUS"] == "INFO").all()
 
 
 # ── config.py matches the contract text ──────────────────────────────────────
@@ -227,6 +230,65 @@ def test_metric_only_sql_matches_contract_5_1():
 def test_metric_by_dimension_sql_matches_contract_5_2():
     assert normalise(forge_data.build_metric_sql("on_time_delivery_rate", "plants.plant_region")) == \
         normalise(contract_sql("### 5.2 Metric by dimension"))
+
+
+def test_every_metric_query_applies_the_3a_time_rule():
+    """§3a / §5.1: ship-date window for OTD and landed cost, order-date window for fill rate,
+    the latest snapshot for days of inventory, anchored on CURRENT_DATE()."""
+    for key, date in config.WINDOW_DATE.items():
+        sql = forge_data.build_metric_sql(key)
+        assert f"WHERE {date} > DATEADD(month, -12, CURRENT_DATE())" in sql
+        assert f"AND {date} <= CURRENT_DATE()" in sql
+    assert normalise(forge_data.build_metric_sql("days_of_inventory", "plants.plant_region")).count(
+        "inventory.snapshot_date = (SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)") == 1
+    # the §5.1 table's fill-rate and days-of-inventory rows, word for word
+    table = normalise(CONTRACT[CONTRACT.index("The `WHERE` depends on the metric:"):CONTRACT.index("### 5.2")].replace("`", ""))
+    assert normalise(forge_data.default_where("fill_rate")) in table
+    assert normalise(forge_data.default_where("days_of_inventory")) in table
+
+
+def test_metrics_with_different_windows_are_never_queried_together():
+    with pytest.raises(ValueError):
+        forge_data.build_metric_sql(["on_time_delivery_rate", "fill_rate"])
+    assert forge_data.build_metric_sql(["on_time_delivery_rate", "avg_landed_cost"])  # same window: allowed
+
+
+def test_all_metrics_live_makes_one_call_per_window(monkeypatch):
+    sent = []
+
+    class Session:
+        def sql(self, sql, params=None):
+            sent.append(sql)
+            raise RuntimeError("offline")
+
+    monkeypatch.setattr(config, "USE_MOCK_DATA", False)
+    monkeypatch.setattr(forge_data, "_session", Session())
+    forge_data.get_all_metrics()
+    forge_data.pop_notices()
+    # the first call fails, so only one is sent; the plan itself has three groups
+    assert sent[0] == forge_data.build_metric_sql(["on_time_delivery_rate", "avg_landed_cost"])
+    assert [len(g) for g in forge_data._window_groups(config.METRICS)] == [2, 1, 1]
+
+
+def test_data_health_has_the_data_spec_shape():
+    data = forge_data.get_data_health("ALL")
+    assert {"entity", "generated_at", "as_of_date", "status", "summary", "entities"} <= set(data)
+    assert [e["entity"] for e in data["entities"]] == forge_data.HEALTH_ENTITIES
+    for e in data["entities"]:
+        assert {"entity", "table", "row_count", "latest_business_date", "freshness_status", "status", "checks"} <= set(e)
+    assert forge_data.get_data_health("shipments")["entities"][0]["entity"] == "shipments"
+    with pytest.raises(ValueError):
+        forge_data.get_data_health("weather")
+
+
+def test_quality_checks_are_judged_by_layer():
+    """Zero is expected only in the cleaned data; raw SOURCE defects are informational."""
+    df = forge_data.get_quality_results().set_index(["TABLE_SCHEMA", "TABLE_NAME", "METRIC_NAME"])
+    assert df.loc[("ERP_SOURCE", "VBAP", "DUPLICATE_COUNT"), "STATUS"] == "INFO"
+    assert df.loc[("CONFORMED", "ORDER_LINE", "DUPLICATE_COUNT"), "STATUS"] == "PASS"
+    assert forge_data._add_quality_status(pd.DataFrame([{
+        "TABLE_SCHEMA": "CONFORMED", "TABLE_NAME": "ORDER_LINE", "METRIC_NAME": "DMF_OVERSHIP_COUNT",
+        "VALUE": 3}]))["STATUS"].iloc[0] == "FAIL"
 
 
 def test_agent_sql_matches_contract_5_3():

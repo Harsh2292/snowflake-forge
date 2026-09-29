@@ -26,6 +26,111 @@
 
 ---
 
+## Session 26 — 2026-09-29 — Claude Code
+
+**Milestone**: M6 (app production pass), replan Day 1
+**Build steps completed**: C09 ✅ (part B, contract v1.5)
+**Credits used this session**: 0
+
+### Done
+- **C09 part B**, building on the approved card:
+  - `config.py` copies v1.5 (§3 strings, §3a window settings, `DATA_HEALTH_PROC`, no MCP,
+    `orders.order_year_quarter`)
+  - `forge_data`: windowed §5 and §8 SQL; one call per window; `get_data_health()`;
+    quality judged by layer (`table_schema`)
+  - screens: an as-of line on every screen (hidden in live if `SP_DATA_HEALTH` is
+    missing), window labels in Explore, per-table freshness in Data health, 10 source
+    tables in the catalog
+- Tests: the 4 contract tests broken by v1.5 are green again; 13 new ones; pairings 55 →
+  58. `pytest -q` 285 passed; `pytest -m ui` 20 passed; screenshots checked.
+
+### Blocked / Open
+- The live test for `orders.order_year_quarter` fails until B09 adds it.
+- `SP_DATA_HEALTH` doesn't exist until B12 (C10 writes it); the app shows practice values
+  until then.
+
+### Next action (exact)
+- C10: data-quality SQL + `SP_DATA_HEALTH` in `quality/` (plan, card, build, hand over).
+
+### Resume notes for the next session (context was cleared here)
+- **State**:
+  - C08 is READY in the handoff lock; CoCo is planning B08c and hasn't run it yet (no
+    `docs/artifacts/runs/` folder)
+  - C09 is done
+  - GitHub CI run #2 failed only on the 4 v1.5 contract tests, which the uncommitted C09
+    work fixes. The user commits and pushes.
+- **C10 inputs (already read once)**:
+  - DATA_SPEC §7.2: the `SP_DATA_HEALTH` signature and JSON shape, the status rules, the DMF
+    minimum table, the schedule (`TRIGGER_ON_CHANGES` else `USING CRON 0 6 * * * UTC`), and
+    the agent tool YAML
+  - `docs/references/data_metric_functions.md` and `agent_custom_tools.md`
+- **Key facts from those**:
+  - custom DMFs must `RETURNS NUMBER`, SQL only, deterministic; multi-table DMFs attach with
+    `ON (col, TABLE(db.sch.t(col)))`
+  - the schedule is per table (all DMFs share it)
+  - `ROW_COUNT` must be attached `ON ()`
+  - `FRESHNESS` on a view or dynamic table needs a column
+  - results are in `SNOWFLAKE.LOCAL.DATA_QUALITY_MONITORING_RESULTS` (`table_schema`,
+    `table_name`, `metric_name`, `argument_names`, `value`, `measurement_time`)
+  - the `SP_DATA_HEALTH` tool is `type: generic`; resource `type: procedure`, identifier
+    `…SP_DATA_HEALTH(VARCHAR)`
+  - `EXECUTE AS OWNER` (owner `FORGE_ADMIN`); it must never return row values or masked
+    columns; output under 16 KB
+- **Names the app already expects** (keep them in C10): `DMF_OVERSHIP_COUNT`,
+  `DMF_ORPHAN_ORDER_LINES`, `DMF_ORPHAN_SHIPMENTS`, `DMF_NEGATIVE_ON_HAND_COUNT`,
+  `DMF_TEST_RECORD_COUNT`, `DMF_NONCONTRACT_CODE_COUNT`, `DMF_COST_OUTLIER_COUNT`.
+  `forge_data.get_data_health()` calls `CALL …SP_DATA_HEALTH(?)` and reads the first
+  column as JSON.
+- **The same rules as C08**:
+  - every file re-runnable on an empty account, naming no account
+  - a header with card, role, warehouse, run order and expected results
+  - hand over via the "Ready for CoCo to run" table
+  - extend `tests/unit/test_data_gen_sql.py`-style static checks to `quality/`
+- **Shell tip**: bash heredocs containing `'''` or backticks break in this environment;
+  write Python edit scripts to the scratchpad with the Write tool, then run them.
+
+---
+
+## Session 25 — 2026-09-29 — Claude Code
+
+**Milestone**: M3 (replan Day 1), the critical path
+**Build steps completed**: C08 ✅ READY (handed to CoCo); B08b confirmation given
+**Credits used this session**: 0 (no Snowflake access)
+
+### Done
+- Read B08b: `docs/DATA_SPEC.md`, `snowflake_execution_notes.md`, and the generation and
+  scripting references. **Confirmed the spec is implementable** in HANDOFF, with 11
+  decisions listed where it left room. Two were real conflicts:
+  - M07's trailing space doesn't fit `VARCHAR(12)`; lower case is used instead
+  - a per-line plant gives ~2.3 shipments per order, not ~1.1; an order-level home plant
+    is used instead
+- Wrote card C08 and built `data_gen/` (the user asked to plan and build it in one go):
+  - `00_setup` (OPS log tables)
+  - `10` `SP_GENERATE_DATA`: hash-only randomness; exact `NUMBER` sums; gap-free IDs;
+    chunked by year; the §5.4 targets measured on the clean load
+  - `20` `SP_INJECT_MESS`: exact-count picks for every §4 code, in a fixed order
+  - `30` `SP_GEN_SELF_CHECKS`: counts, uniqueness, checksum repeat, targets, rates,
+    data cross-checks, the `LOAD_TS` cap
+  - `99_run`: dry run twice, then SF 1; fixed `END_DATE` for the account switch
+  - `README.md`
+- New offline checks, `tests/unit/test_data_gen_sql.py` (23): no `RANDOM()` or clock in the
+  data; no account names in `data_gen/`, `app/` or `deploy/`; re-runnable DDL; headers;
+  every §4 code at its rate; variants equal to §4.3. Checked they catch breakage.
+- Handed over under the lock (HANDOFF "Ready for CoCo to run": READY).
+- Updated `CLAUDE.md` to contract v1.5.
+
+### Blocked / Open
+- C08's live gate is CoCo's run report (B08c). Errors inside procedure bodies only show at
+  `CALL` time, so the dry run comes first.
+- **4 offline contract tests fail**: contract v1.5 changed the §3 strings, the §5 windows
+  and the §8 queries. That's C09 part B, next.
+
+### Next action (exact)
+- C09 part B: the v1.5 definition strings and time windows in `config.py` / `forge_data.py`,
+  the as-of date, the `SP_DATA_HEALTH` display, removing MCP. Then C10 and C11.
+
+---
+
 ## Session 24 — 2026-09-29 — CoCo
 
 **Milestone**: M3 (replan, Day 1)

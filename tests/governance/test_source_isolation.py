@@ -15,7 +15,7 @@ from utils import config, forge_data
 SOURCE_SCHEMAS = ("ERP_SOURCE", "WMS_SOURCE", "TMS_SOURCE", "SRM_SOURCE")
 
 # Public functions that never send SQL of their own.
-NOT_QUERIES = {"pop_notices", "data_mode", "get_session", "validate",
+NOT_QUERIES = {"pop_notices", "data_mode", "get_session", "validate", "default_where",
                "get_source_schema_summary"}  # static catalog in both modes (C02)
 
 
@@ -47,6 +47,7 @@ CALLS = {
     "get_naive_otd": forge_data.get_naive_otd,
     "get_governed_otd": forge_data.get_governed_otd,
     "get_quality_results": forge_data.get_quality_results,
+    "get_data_health": lambda: [forge_data.get_data_health(e) for e in ["ALL", *forge_data.HEALTH_ENTITIES]],
 }
 
 
@@ -70,6 +71,6 @@ def test_every_statement_is_a_contract_pattern(statements):
     allowed = [config.SEMANTIC_VIEW, "SNOWFLAKE.CORTEX.DATA_AGENT_RUN",
                *[f"CALL {p}()" for p in config.PERSONA_SAMPLE_PROCS.values()],
                *[f"CALL {p}()" for p in config.PERSONA_METRIC_PROCS.values()],
-               "SNOWFLAKE.LOCAL.DATA_QUALITY_MONITORING_RESULTS"]
+               "SNOWFLAKE.LOCAL.DATA_QUALITY_MONITORING_RESULTS", forge_data.DATA_HEALTH_SQL]
     for sql in set(statements) - {forge_data.NAIVE_OTD_SQL}:
         assert any(a in sql for a in allowed), f"not a contract query pattern:\n{sql}"

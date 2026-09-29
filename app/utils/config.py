@@ -1,6 +1,6 @@
 """Contract constants for the Supply Chain Forge app.
 
-Everything here is copied from docs/CONTRACT.md (v1.4). If Snowflake turns out to differ
+Everything here is copied from docs/CONTRACT.md (v1.5). If Snowflake turns out to differ
 from these values, file a Change Request in CONTRACT.md §11. Do not edit them to match
 reality.
 """
@@ -12,7 +12,8 @@ USE_MOCK_DATA = True
 DATABASE = "SUPPLY_CHAIN_FORGE"
 SEMANTIC_VIEW = "SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV"
 AGENT = "SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_AGENT"
-MCP_SERVER = "SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_MCP"
+# The agent's data-health tool (CR-006): freshness, the as-of date and data-quality status.
+DATA_HEALTH_PROC = "SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH"
 STREAMLIT_APP = "SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO"
 WAREHOUSE = "FORGE_WH"
 
@@ -61,7 +62,9 @@ METRICS = {
         "label": "On-Time Delivery",
         "format": "percent",
         "definition": "Share of delivered shipments arriving on or before the TMS "
-                      "promised delivery date. Excludes in-transit shipments.",
+                      "promised delivery date. Excludes in-transit shipments and "
+                      "shipments with no promised date. Without a stated period, "
+                      "covers shipments shipped in the last 12 months.",
     },
     "fill_rate": {
         "id": "order_lines.fill_rate",
@@ -69,21 +72,28 @@ METRICS = {
         "format": "percent",
         "definition": "Quantity shipped divided by quantity ordered across order "
                       "lines on shipped or delivered orders. Open and cancelled "
-                      "orders are excluded. Partial shipments are pro-rated.",  # v1.4, CR-005
+                      "orders are excluded. Partial shipments are pro-rated; "
+                      "over-shipments count as fully shipped. Without a stated "
+                      "period, covers orders placed in the last 12 months.",
     },
     "days_of_inventory": {
         "id": "inventory.days_of_inventory",
         "label": "Days of Inventory",
         "format": "number",
         "definition": "Average on-hand quantity divided by average daily usage. "
-                      "Uses gross on-hand, not net of reservations.",
+                      "Uses gross on-hand, not net of reservations; negative "
+                      "on-hand counts as zero. Without a stated period, uses the "
+                      "latest inventory snapshot.",
     },
     "avg_landed_cost": {
         "id": "shipments.avg_landed_cost",
         "label": "Avg Landed Cost",
         "format": "currency",
-        "definition": "Average total cost to move a shipment to destination: "
-                      "freight plus duties plus handling.",
+        "definition": "Average total cost to move a shipment to destination, in "
+                      "USD: freight plus duties plus handling. Missing duty or "
+                      "handling counts as zero; shipments with unknown or "
+                      "implausible cost are excluded. Without a stated period, "
+                      "covers shipments shipped in the last 12 months.",
     },
 }
 
@@ -94,6 +104,24 @@ METRIC_RANGES = {
     "avg_landed_cost": (150, 900),
 }
 
+# ── §3a Time rule (CR-006) ───────────────────────────────────────────────────
+# Without a stated period: trailing 12 months on the metric's window date, anchored on
+# CURRENT_DATE(); days of inventory uses the latest snapshot instead.
+WINDOW_MONTHS = 12
+WINDOW_DATE = {
+    "on_time_delivery_rate": "shipments.ship_date",
+    "fill_rate": "orders.order_date",
+    "avg_landed_cost": "shipments.ship_date",
+}
+LATEST_SNAPSHOT = ("inventory.snapshot_date = "
+                   "(SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)")
+WINDOW_LABEL = {  # app wording for the window each number covers
+    "on_time_delivery_rate": "last 12 months",
+    "fill_rate": "last 12 months",
+    "days_of_inventory": "latest snapshot",
+    "avg_landed_cost": "last 12 months",
+}
+
 # ── §4 Dimensions ────────────────────────────────────────────────────────────
 DIMENSIONS = {
     "suppliers": ["suppliers.supplier_name", "suppliers.supplier_region", "suppliers.supplier_tier"],
@@ -101,7 +129,8 @@ DIMENSIONS = {
     "plants": ["plants.plant_name", "plants.plant_region", "plants.plant_country", "plants.plant_type"],
     "customers": ["customers.customer_segment", "customers.customer_region"],
     "orders": ["orders.order_date", "orders.order_month", "orders.order_quarter",
-               "orders.order_year", "orders.order_status", "orders.order_priority"],
+               "orders.order_year", "orders.order_year_quarter", "orders.order_status",
+               "orders.order_priority"],
     "shipments": ["shipments.ship_date", "shipments.carrier", "shipments.shipment_status"],
     "inventory": ["inventory.snapshot_date"],
 }

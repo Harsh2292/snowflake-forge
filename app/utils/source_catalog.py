@@ -63,7 +63,11 @@ _ROWS = [
     ("ERP", "ERP_SOURCE", "VBAP", "WERKS", "V_ORDER_LINE", "plant_id", "Fulfilling plant", ""),
     ("ERP", "ERP_SOURCE", "VBAP", "KWMENG", "V_ORDER_LINE", "quantity_ordered", "Quantity ordered", ""),
     ("ERP", "ERP_SOURCE", "VBAP", "QTY_SHIPPED", "V_ORDER_LINE", "quantity_shipped", "Quantity shipped", ""),
-    ("ERP", "ERP_SOURCE", "VBAP", "NETPR", "V_ORDER_LINE", "unit_price", "Unit price", ""),
+    ("ERP", "ERP_SOURCE", "VBAP", "NETPR", "V_ORDER_LINE", "unit_price", "Unit price, in the order currency", ""),
+    ("ERP", "ERP_SOURCE", "VBAK", "WAERK", "", "", "Order currency: prices are converted to USD before use", ""),
+    ("ERP", "ERP_SOURCE", "TCURR", "FCURR", "", "", "Exchange rate: from currency", ""),
+    ("ERP", "ERP_SOURCE", "TCURR", "GDATU", "", "", "Exchange rate: valid from", ""),
+    ("ERP", "ERP_SOURCE", "TCURR", "UKURS", "", "", "Exchange rate: USD per unit", ""),
     ("TMS", "TMS_SOURCE", "VTTK", "TKNUM", "V_SHIPMENT", "shipment_id", "Shipment ID", ""),
     ("TMS", "TMS_SOURCE", "VTTK", "VBELN", "V_SHIPMENT", "order_id", "Order ID", ""),
     ("TMS", "TMS_SOURCE", "VTTK", "WERKS", "V_SHIPMENT", "plant_id", "Origin plant", ""),
@@ -76,6 +80,7 @@ _ROWS = [
     ("TMS", "TMS_SOURCE", "VTTK", "DUTY_AMT", "V_SHIPMENT", "duty_cost", "Duty cost", ""),
     ("TMS", "TMS_SOURCE", "VTTK", "HANDLING_AMT", "V_SHIPMENT", "handling_cost", "Handling cost", ""),
     ("TMS", "TMS_SOURCE", "VTTK", "SHP_STATUS", "V_SHIPMENT", "shipment_status", "Shipment status", ""),
+    ("TMS", "TMS_SOURCE", "VTTK", "WAERS", "", "", "Cost currency: costs are converted to USD before use", ""),
 ]
 
 COLUMNS = ["SYSTEM", "SOURCE_SCHEMA", "SOURCE_TABLE", "SOURCE_COLUMN",

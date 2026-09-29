@@ -6,46 +6,36 @@
 
 ## Parallel Execution Model
 
-Both agents work simultaneously against the frozen `docs/CONTRACT.md`.
-Live access is exposed in **three staged unlocks**, not one handoff at the end.
+Both agents work simultaneously against the frozen `docs/CONTRACT.md`. Claude Code has no
+Snowflake access: CoCo runs everything and hands real output back as artifacts.
+
+**Replanned 2026-09-29 (user-approved):** finish in 3 days, production-ready and deployed,
+with realistic 10-year data, a cleansing layer, a scale proof and cost controls. Queue:
+`.agents/tasks/COCO_TASKS.md`. Post-hackathon: `docs/ROADMAP.md`.
 
 ```
-        CoCo (Snowflake)                     Claude Code (app)
-        ────────────────                     ─────────────────
-M1      B1  database, schemas           C1   API reference library
-        B2  roles, grants               C2   data access layer (mock + live branches)
-        B3  source tables               C3   Streamlit app, 5 tabs (mock-driven)
-        B4  data generation             C4   test suite (written; red until live)
-        B5  distribution verify         C5   demo script, README
-
-M2      B6  tags, masking
-        B7  governed views
-        B7b persona procedures
-        B7c MCP read-only  ───────────► C6a  verify governed columns + masking   LIVE
-
-M3      B8  semantic view  ───────────► C6b  verify metrics + dimensions         LIVE
-        B9  verified queries
-
-M4      B10 Cortex Agent   ───────────► C6c  verify agent response parsing       LIVE
-        B11 consistency check
-        B12 DMFs
-        B13 contract audit
-        B14 MCP + agent tools
-        B15 handoff
-
-M5                                           deploy to SiS, full demo
-
-M6      differentiation (both)
+        CoCo (Snowflake)                          Claude Code (app, data)
+        ────────────────                          ───────────────────────
+M1-M2   B1–B7b foundation + governance  ✅   ──► C6a  ✅   (C01–C04, C07 ✅)
+M3      B8   semantic view v1           ✅
+        B8b  data spec v2 + CR-006    ────────►  C08  data generator (data_gen/)
+        B8c  load + CONFORMED layer   ◄────────  C08         C09 app production pass
+        B9   semantic view v2 → art 05/06/09 ──► C6b
+M4      B10  agent + evaluation set → art 07/08 ► C6c
+M5      B12  data-quality checks → art 10
+        B13  scale proof on a clone → art 12
+M6      B14  contract audit + security → art 11
+        B15  production hardening + deploy        C05 demo, README; rehearsal
 ```
 
-**First live unlock is at B7c — about 40% through CoCo's queue.** Deliberate: contract
-mismatches surface while they are still cheap to fix, rather than during final integration.
+Critical path: **B8b → C08 → B8c → B9 captures → B10 → B15**.
 
 ### Genuinely sequential residue
 
 | Item | Why unavoidable |
 |------|----------------|
-| Live tests going green | Objects must exist before a query can succeed |
+| Loading the generated data | C08 must exist before B8c can run it |
+| Artifact capture | Objects and data must exist before a query can run |
 | SiS deployment | Needs semantic view + agent deployed |
 | Final demo rehearsal | Needs the whole stack |
 
@@ -121,31 +111,30 @@ All 3 roles    → can SELECT every governed view without error
 
 ---
 
-## M3 — Semantic Layer  ← THE CRITICAL MILESTONE
+## M3 — Semantic Layer and Realistic Data  ← THE CRITICAL MILESTONE
 
-**Goal**: The ontology exists as a queryable semantic view with canonical metrics.
+**Goal**: The ontology exists as a queryable semantic view with canonical metrics, over
+realistic, messy, 10-year data that a cleansing layer repairs.
 
-**Build steps**: B8 → B9
+**Build steps**: B8 ✅ → B8b → B8c → B9 (Claude Code: C08 generator)
 
 | Task | Owner |
 |------|-------|
-| Semantic view with 2 tables, validated | CoCo |
-| Grow to 9 tables + 10 relationships | CoCo |
-| Facts, dimensions, 4 canonical metrics | CoCo |
-| `AI_SQL_GENERATION` + `AI_QUESTION_CATEGORIZATION` instructions | CoCo |
-| 8 `AI_VERIFIED_QUERIES` | CoCo |
+| Semantic view with 2 tables, validated; grown to 9 tables + 10 relationships | CoCo ✅ |
+| Facts, dimensions, 4 canonical metrics; `SP_METRICS_AS_*` | CoCo ✅ |
+| Data spec v2: source changes, mess catalogue, metric and time rules, interfaces (CR-006) | CoCo |
+| Seeded SQL data generator in `data_gen/` (CoCo runs it) | Claude Code |
+| Load the data; `CONFORMED` cleansing layer under the governed views | CoCo |
+| Semantic view v2: every business column, AI instructions, verified queries | CoCo |
+| Metadata-driven view generator + name search (Cortex Search) | CoCo |
 
 **Exit criterion**:
-```sql
--- All four must return sensible values
-SELECT * FROM SEMANTIC_VIEW(SUPPLY_CHAIN_SV METRICS shipments.on_time_delivery_rate);
-SELECT * FROM SEMANTIC_VIEW(SUPPLY_CHAIN_SV METRICS order_lines.fill_rate);
-SELECT * FROM SEMANTIC_VIEW(SUPPLY_CHAIN_SV METRICS inventory.days_of_inventory);
-SELECT * FROM SEMANTIC_VIEW(SUPPLY_CHAIN_SV METRICS shipments.avg_landed_cost);
-
--- Plus at least one metric × dimension combination
-SELECT * FROM SEMANTIC_VIEW(SUPPLY_CHAIN_SV
-  METRICS shipments.on_time_delivery_rate DIMENSIONS plants.plant_region);
+```
+The 4 metrics return values inside the §3 ranges on the new data, identical across personas
+Every repairable defect present in SOURCE, absent in CONFORMED
+§7 governed columns unchanged; §4 matrix passes (55 valid, the invalid rejected)
+DESCRIBE SEMANTIC VIEW lists every verified query, and each runs
+Art 05, 06, 09 re-captured
 ```
 
 **Risk note**: build incrementally. Semantic view validation is strict about clause
@@ -155,74 +144,70 @@ order (FACTS before DIMENSIONS before METRICS) and metric/dimension granularity.
 
 ## M4 — Conversational Layer
 
-**Goal**: Natural language questions return governed answers.
+**Goal**: Natural language questions return governed answers, with measured accuracy.
 
-**Build steps**: B10 → B12
+**Build steps**: B10 (Claude Code: C6c)
 
 | Task | Owner |
 |------|-------|
-| Cortex Agent with Analyst + chart tools | CoCo |
-| Agent tested against 8 canonical questions | CoCo |
-| Cross-persona consistency verified in SQL | CoCo |
-| 5 DMFs attached and running | CoCo |
-| `HANDOFF.md` updated with all FQNs | CoCo |
+| Cortex Agent with Analyst + chart + data-health tools | CoCo |
+| Evaluation set + runner (about 25–30 questions: canonical, cross-functional, multi-part, out-of-scope, ambiguous, Hindi); CoCo runs it | Claude Code |
+| Agent response parser + proof grid against real JSON | Claude Code |
 
 **Exit criterion**:
 ```
-DATA_AGENT_RUN returns a grounded numeric answer for all 8 canonical questions
-All 4 metrics identical across PLANNER / BUYER / LOGISTICS (6 decimal places)
-Agent declines an out-of-scope question
-Agent asks for clarification on an ambiguous question
-DMF results visible in DATA_QUALITY_MONITORING_RESULTS
+The 8 canonical answers match art 05
+Out-of-scope questions are refused; ambiguous ones get a clarifying question
+The evaluation pass rate and latencies are recorded (art 08)
+No masked value leaks into an answer
 ```
 
 **This is the MVP boundary.** After M4 the core product works end to end.
 
 ---
 
-## M5 — Demo Layer
+## M5 — Quality and Scale
 
-**Goal**: A human can see and believe the whole thing in five minutes.
+**Goal**: Show the data is trustworthy, and that the core system behaves the same at scale.
 
-**Build steps**: B14 → B15
+**Build steps**: B12 → B13
 
 | Task | Owner |
 |------|-------|
-| Streamlit app: persona switcher + NL query + results | Claude Code |
-| Consistency proof tab | Claude Code |
-| Metric charts | Claude Code |
-| `pytest` consistency suite | Claude Code |
+| DMF and `SP_DATA_HEALTH` SQL (CoCo runs it) | Claude Code |
+| Scale-test harness (CoCo runs it on a zero-copy clone, 100M+ order lines, sized to budget) | Claude Code |
+| Running both, and the scale report (art 12) | CoCo |
 
 **Exit criterion**:
 ```
-App deployed to SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO
-Persona switcher changes visible detail but not metric values
-NL query returns an answer inside the app
-Consistency tab shows 12 green assertions (4 metrics × 3 roles)
-pytest passes
+DMF results visible in DATA_QUALITY_MONITORING_RESULTS; SOURCE shows the injected defects,
+CONFORMED shows none of the repairable ones
+At scale: every path returns, definitions and SQL shape unchanged, personas identical,
+timings and credits recorded (art 12)
 ```
 
 ---
 
-## M6 — Differentiation
+## M6 — Production and Demo
 
-**Goal**: Move from "works" to "wins."
+**Goal**: Deployed, hardened, and believable in five minutes.
 
-**Build steps**: B16 + enhancements
+**Build steps**: B14 → B15 (Claude Code: C09, C05)
 
 | Task | Owner | Judge criterion |
 |------|-------|----------------|
-| "Disagreement" demo — naive ERP-only SQL vs governed metric | CoCo | Real World Relevance |
-| Lineage trace: source column → metric → answer | CoCo | Technical Execution |
-| Edge-case suite: ambiguous, out-of-scope, cross-domain | CoCo | Technical Execution |
-| Multilingual query demo | CoCo | Real World Relevance |
-| DMF quality panel in app | Claude Code | Solution Completeness |
-| Demo script rehearsed to 5 minutes | Both | All three |
-| Submission README | Both | Solution Completeness |
-| SQL + security review sweep | CoCo | Technical Execution |
+| Contract audit (runs Claude Code's live tests) + security review (art 11) | CoCo | Technical Execution |
+| Live tests refreshed for the new data and CR-006 | Claude Code | Technical Execution |
+| Cost controls: resource monitor, sizing, query tags | CoCo | Technical Execution |
+| Deploy to `APP.FORGE_DEMO`; verify it runs in SiS | CoCo | Solution Completeness |
+| App production pass: `NULL` handling, paging, as-of date, live mode | Claude Code | Solution Completeness |
+| "Disagreement" demo — naive ERP-only SQL vs governed metric | Both | Real World Relevance |
+| Demo script rehearsed to 5 minutes; submission README | Claude Code | All three |
+| Stretch: parallel multi-part router, KPI shortcut, lineage trace | Both | Technical Execution |
 
-**Exit criterion**: demo runs start to finish in under 5 minutes without a failure,
-and every judging criterion has a specific moment in the demo that addresses it.
+**Exit criterion**: the deployed app runs the demo start to finish in under 5 minutes
+without a failure, and every judging criterion has a specific moment in the demo that
+addresses it.
 
 ---
 
@@ -231,9 +216,9 @@ and every judging criterion has a specific moment in the demo that addresses it.
 | Milestone | Status | Exit criterion met |
 |-----------|--------|-------------------|
 | M0 Foundation | ✅ Complete | Yes |
-| M1 Data Foundation | ⬜ Not started | — |
-| M2 Governance | ⬜ Not started | — |
-| M3 Semantic Layer | ⬜ Not started | — |
+| M1 Data Foundation | ✅ Complete (v1 data; realistic data comes in M3) | Yes |
+| M2 Governance | ✅ Complete | Yes |
+| M3 Semantic Layer + realistic data | 🔄 B8 done; B8b next | — |
 | M4 Conversational | ⬜ Not started | — |
-| M5 Demo | ⬜ Not started | — |
-| M6 Differentiation | ⬜ Not started | — |
+| M5 Quality and Scale | ⬜ Not started | — |
+| M6 Production and Demo | ⬜ Not started | — |

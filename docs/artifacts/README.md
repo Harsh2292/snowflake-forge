@@ -20,9 +20,12 @@ Rather than block on credential setup, CoCo captures real outputs as committed f
 Claude Code parses actual Snowflake output instead of guessing, and no one has to create a
 token.
 
-**The MCP server is still built (B14).** It is a *product feature* demonstrated to judges —
-"the governed ontology is reachable by any MCP client" — not a development dependency.
-Those two concerns are now cleanly separated.
+**The MCP server was dropped on 2026-09-29** (user decision): it doesn't help the core
+system deliver correct answers. Artifact handoff stays the only verification path.
+
+The same no-credentials rule covers the realistic data (from the 2026-09-29 replan):
+Claude Code writes the SQL generator in `data_gen/`, CoCo reviews and runs it, and the
+results come back here as artifacts.
 
 ---
 
@@ -40,19 +43,38 @@ Those two concerns are now cleanly separated.
 
 ## Artifact schedule
 
+Replanned 2026-09-29: the data becomes realistic (10 years, real-world mess) at **B08c**,
+so art 02–06 were captured on the v1 data and are re-captured on the new data.
+
 | File | Produced at | Contents | Consumed by |
 |------|------------|----------|-------------|
 | `01_default_role.md` | **B02** | The user's default role + default warehouse (agents use default role, not session role) | reference |
-| `02_raw_metrics.md` | **B05** | Raw metric values before any semantic layer: naive ERP-date OTD, governed-date OTD, fill rate, DOI, landed cost | C05 demo script, Tab 3 |
-| `03_governed_columns.json` | **B07** | `INFORMATION_SCHEMA.COLUMNS` dump for all 9 governed views — real column names and types | **C6a** |
-| `04_persona_outputs.json` | **B07b** | Actual output of all three persona procedures, showing real masked values | **C6a** |
-| `05_metric_values.json` | **B08** | All 4 metric values, plus each metric broken out by every valid dimension | **C6b** |
-| `06_dimension_matrix.md` | **B08** | Every metric × dimension pairing actually tested: pass/fail, with the error text for failures | **C6b** |
+| `02_raw_metrics.md` | **B05** (v1 data; the B08c gate re-measures it) | Raw metric values before any semantic layer: naive ERP-date OTD, governed-date OTD, fill rate, DOI, landed cost | C05 demo script, Tab 3 |
+| `03_governed_columns.json` | **B07**, re-captured at **B08c** | `INFORMATION_SCHEMA.COLUMNS` dump for all 9 governed views — real column names and types | **C6a** |
+| `04_persona_outputs.json` | **B07b**, re-captured at **B08c** | Actual output of all three persona procedures, showing real masked values | **C6a** |
+| `05_metric_values.json` | **B08**, re-captured at **B09** | All 4 metric values, plus each metric broken out by every valid dimension | **C6b** |
+| `06_dimension_matrix.md` | **B08**, re-captured at **B09** | Every metric × dimension pairing actually tested: pass/fail, with the error text for failures | **C6b** |
 | `07_agent_response.json` | **B10** | ⭐ **A real, complete `DATA_AGENT_RUN` response** — unabridged | **C6c** |
-| `08_agent_answers.md` | **B10** | All 8 canonical questions with the agent's actual answers and generated SQL | **C6c** |
-| `09_consistency_proof.json` | **B11** | 4 metrics × 3 personas, real values, to 6 decimal places | **C6c** |
+| `08_agent_answers.md` | **B10** | The whole evaluation set (about 25 questions): answers, generated SQL, pass/fail, latency | **C6c** |
+| `09_consistency_proof.json` | **B09** (old B11 merged in) | 4 metrics × 3 personas, real values, to 6 decimal places | **C6c** |
 | `10_dmf_results.json` | **B12** | `DATA_QUALITY_MONITORING_RESULTS` snapshot | Tab 5 |
-| `11_contract_audit.md` | **B13** | Line-by-line conformance result against `docs/CONTRACT.md` | all |
+| `11_contract_audit.md` | **B14** | Line-by-line conformance result against `docs/CONTRACT.md`, plus the security review | all |
+| `12_scale_report.md` | **B13** | The scale proof on a clone: timings, partition pruning, credits, and proof the definitions and SQL shape didn't change | C05, README |
+
+### Run reports: `runs/`
+
+From the 2026-09-29 replan, Claude Code writes Snowflake SQL (`data_gen/`, `quality/`,
+`eval/`, `tests/scale/`) and CoCo runs it. Every run produces
+`docs/artifacts/runs/<card>_run.md`:
+- the file(s), role, warehouse, parameters and timestamp
+- each statement's outcome, with verbatim error text for failures
+- row counts, timings and the self-check results
+- any small run-blocking fix CoCo applied, as a diff (Claude Code adopts it in its file)
+- the verdict: **DONE** or **RETURNED** (also set in the "Ready for CoCo to run" table in
+  `.agents/HANDOFF.md`)
+
+Run reports are working records, not contract artifacts; the numbered artifacts above stay
+the fixtures.
 
 ---
 
@@ -86,17 +108,9 @@ was, so the capture is reproducible.
 
 ---
 
-## Upgrade path (only if artifacts prove insufficient)
+## If artifacts prove insufficient
 
-If Claude Code hits something it genuinely cannot verify from a file, escalate to live
-read-only access:
-
-1. CoCo creates role `FORGE_MCP_READER` — `USAGE` on database/`GOVERNED`/`SEMANTIC`,
-   `SELECT` on governed views, `USAGE` on the persona procedures. **No write privileges.**
-2. CoCo deploys `SUPPLY_CHAIN_MCP_RO` with a single read-only `SYSTEM_EXECUTE_SQL` tool
-3. **User** creates a PAT in Snowsight bound to `FORGE_MCP_READER` — never `ACCOUNTADMIN`
-4. **User** stores it via `/secrets`. Never paste a token into chat.
-5. CoCo writes the MCP client config. Hostnames use **hyphens, not underscores**.
-
-This is build step **B07c**, currently deferred. Do not do this work speculatively — it is
-only worth the setup cost if artifacts actually fall short.
+If Claude Code hits something it genuinely can't verify from a file, it raises it in
+`.agents/HANDOFF.md` under `## Blocked`, naming exactly what it needs. CoCo then captures
+an extra artifact. The read-only MCP upgrade path (old B07c) was dropped on 2026-09-29,
+together with the MCP server.

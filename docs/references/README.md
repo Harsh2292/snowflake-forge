@@ -15,8 +15,22 @@
 | `semantic_view_query.md` | `SEMANTIC_VIEW()` construct: clause order, output column naming, granularity rules | HIGH |
 | `streamlit_in_snowflake.md` | SiS specifics: `get_active_session()`, supported widgets, `CREATE STREAMLIT` | HIGH |
 | `snowpark_session.md` | `Session.sql()`, `.collect()`, `.to_pandas()`, parameter binding | MEDIUM |
-| `mcp_client_setup.md` | Connecting an MCP client to a Snowflake-managed MCP server | MEDIUM (needed at C6) |
+| `mcp_client_setup.md` | Connecting an MCP client to a Snowflake-managed MCP server | OBSOLETE (MCP dropped 2026-09-29, ADR-008) |
 | `plotly_streamlit.md` | Chart patterns actually used in the app | LOW |
+
+### Context pack for the SQL tracks (added by CoCo at B08b, 2026-09-29; Claude Code owns them now)
+
+| File | Covers | Used by |
+|------|--------|---------|
+| `snowflake_execution_notes.md` | **How CoCo runs your SQL**, live-verified: session state not kept between calls, compile-only doesn't check procedure bodies, the determinism recipe, the time-window patterns, query history and pruning | C08, C10, C11, C12 (read first) |
+| `snowflake_data_generation.md` | `GENERATOR`, `SEQ*` (gaps), `RANDOM`/`UNIFORM` (not reproducible), `HASH`, the deterministic recipe, bulk inserts, constraint enforcement | C08 |
+| `snowflake_scripting_procedures.md` | Blocks, binding, `IDENTIFIER`, `EXECUTE IMMEDIATE`, `RESULTSET`, cursors, `RETURNS TABLE` vs `VARIANT`, owner's vs caller's rights, exceptions | C08, C10, C11, C12 |
+| `data_metric_functions.md` | System and custom DMFs, schedules, attaching to tables/views/dynamic tables, `DATA_QUALITY_MONITORING_RESULTS`, privileges | C10 |
+| `agent_custom_tools.md` | `CREATE AGENT` spec, tool types, a stored procedure as a `generic` tool (`tool_resources`: `type: procedure`, `identifier` with argument types) | C10 (`SP_DATA_HEALTH`), C6c |
+| `agent_evaluations.md` | Native agent evaluations (dataset format, `EXECUTE_AI_EVALUATION`, metrics) and a `DATA_AGENT_RUN`-based runner | C11 |
+| `snowpark_async.md` | `collect_nowait`, `AsyncJob`, running N queries concurrently and merging in order | C14 |
+
+The spec these serve is `docs/DATA_SPEC.md` (CoCo-owned).
 
 ## Status — C01 complete (2026-09-24)
 

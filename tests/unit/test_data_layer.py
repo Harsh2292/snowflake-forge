@@ -205,6 +205,18 @@ def test_personas_and_mock_fixtures_are_copied_verbatim():
     assert mock["MOCK_BY_REGION"] == config.MOCK_BY_REGION
 
 
+def test_governed_columns_are_copied_verbatim_from_contract_7():
+    section = CONTRACT[CONTRACT.index("## 7. Governed View Column Names"):]
+    section = section[:section.index("\n## ", 1)]
+    rows = re.findall(r"^\| `GOVERNED\.(V_\w+)` \| (.+) \|$", section, re.M)
+    assert {view: re.findall(r"`(\w+)`", cells) for view, cells in rows} == config.GOVERNED_COLUMNS
+
+
+def test_sample_columns_are_copied_verbatim_from_contract_5_4():
+    section = CONTRACT[CONTRACT.index("**Sample data procedures**"):CONTRACT.index("**Metric procedures")]
+    assert re.findall(r"^\| `(\w+)` \|", section, re.M) == config.SAMPLE_COLUMNS
+
+
 # ── SQL matches the contract text ────────────────────────────────────────────
 
 def test_metric_only_sql_matches_contract_5_1():

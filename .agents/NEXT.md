@@ -3,99 +3,95 @@
 > **Single source of truth for "what's next".** Read this, open the named card, execute it.
 > Whichever agent finishes a card updates this file.
 
-**Last updated**: 2026-09-27 · **Contract**: v1.4 · **Branch**: `development`
+**Last updated**: 2026-09-29 (CR-006 accepted) · **Contract**: **v1.5** (CR-006 accepted by the user 2026-09-29) · **Branch**: `development`
+
+> **DEADLINE (from the user): submission 4 Oct 2026. Everything done by end of 2 Oct.**
+> Day 1 = 29 Sep · Day 2 = 30 Sep · Day 3 = 1 Oct · **2 Oct = buffer, fixes, rehearsal,
+> the user records the video**. Both agents work to the same dates.
+
+> **Replanned 2026-09-29 (user-approved).** Finish in **3 days, production-ready and
+> deployed**. The core system (question → agent → semantic view → SQL → governed data →
+> answer) must stay correct, fast and cheap from today's small data to billions of rows,
+> and while the data keeps changing. The CoCo queue is in `.agents/tasks/COCO_TASKS.md`,
+> which starts with the 9 core system rules. The post-hackathon work is in `docs/ROADMAP.md`.
 
 ---
 
-## CoCo → `B08` Semantic view
+## CoCo → `B08b` delivered; CR-006 accepted (contract v1.5) · next `B09`, then `B09a`
 
-```
-.agents/tasks/coco/B08_semantic_view.md   (to be written at planning time)
-```
+**B08b landed (2026-09-29):**
+- `docs/DATA_SPEC.md`, the spec for all of Claude Code's SQL
+- **CR-006 ACCEPTED** by the user; applied in `docs/CONTRACT.md` as **v1.5**
+- 7 reference files in `docs/references/`
+- card: `.agents/tasks/coco/B08b_data_spec.md`
 
-Build `SEMANTIC.SUPPLY_CHAIN_SV` incrementally over the governed views, capture art 05 and
-art 06, then build the three `SP_METRICS_AS_*` procedures (CR-002). The B8 section of
-`COCO_TASKS.md` lists what B07/B07b carried in: the CR-005 fill-rate filter, the §3 DOI
-formula, the GAP-2 time dimensions, and persona `SELECT` on the semantic view.
+The gate needs:
+1. ~~the user to approve CR-006~~ ✅ accepted 2026-09-29
+2. Claude Code to confirm in HANDOFF that the spec is implementable
 
----
+Then **B09** (semantic view v2) and **B09a** (generator + name search) on today's data.
+**B08c** starts when C08 is READY.
 
-## Claude Code → C6a Reconcile governed layer (card written, needs the user's go-ahead)
-
-```
-.agents/tasks/claude/C06a_reconcile_governed.md   (planned 2026-09-27, on hold)
-```
-
-**Paused 28–30 Sep** (the user is away). Resume on 30 Sep / 1 Oct in this order:
-1. **C6a**: ask the user to approve the card, then build it. Art 03 and 04 already match
-   the contract, with 0 mismatches found on the first check.
-2. **C6b / C6c**: as soon as CoCo lands art 05/06 (B08) and art 07–09 (B10/B11).
-3. **C05**: demo script and README, with the real numbers.
-4. Last day: rehearsal, the user records the video, submission.
-
-Already done: contract v1.4 (`fill_rate` string in `config.py`), C04 tests (`pytest -q`
-188 passed; live variants skip without Snowflake; `pytest -m ui` 18 passed), C07 CI and
-deploy script.
+> **Account switch (user-approved 2026-09-29; plan in `COCO.md`, "Account switch plan").**
+> The organisers issued a new event account ($400, 30 days; **claim by 3 Oct UTC**).
+> - Build in the old account until the **end of 1 Oct**, including B13.
+> - **B08m trial move 30 Sep**; **cutover at the end of 1 Oct**.
+> - **2 Oct (B14, B15 deploy, final artifacts) runs in the new account.**
+> - **User action today:** claim the account ("AI Data Cloud" flow, same email, Enterprise
+>   edition) and add a VS Code connection.
+> - **Both agents:** everything must be a re-runnable repo script, and nothing may name the
+>   account.
 
 ---
 
-## How Parallelism Actually Works
+## Claude Code → `C08` the moment `docs/DATA_SPEC.md` lands (critical path), then `C10`, `C11`; C09 part B with them
 
-Claude Code does **not** wait for CoCo, and needs **no Snowflake credentials**.
+Queue and full detail: `.agents/tasks/CLAUDE_TASKS.md` (replanned 2026-09-29). Claude
+Code **writes Snowflake SQL, CoCo runs it** (the handoff lock). Write each card before
+building it.
+1. **C09** app production pass: **part A done** (29 Sep); part B (as-of date,
+   `SP_DATA_HEALTH` display, MCP removal) when the spec and CR-006 land
+2. **C08** realistic data generator in `data_gen/`: as soon as `docs/DATA_SPEC.md` lands;
+   **READY by the end of Day 1**
+3. **C10** data-quality SQL + `SP_DATA_HEALTH` in `quality/` (Day 1–2)
+4. **C11** evaluation set + runner in `eval/` (Day 1–2)
+5. **C6b** after the re-captured art 05/06 (Day 2); **C12** scale harness (Day 2)
+6. **C6c** after art 07–09 (Day 2); **C13** live-test refresh (Day 2–3)
+7. **C05** demo, README, core-scalability doc (Day 3); **C14** stretch router
+8. Day 3: rehearsal; the user records the video.
 
-It builds the whole app against the frozen contract with a mock data layer. CoCo runs the
-live queries and commits the **real output** to `docs/artifacts/`. Claude verifies against
-those files. Three staged unlocks, not one handoff at the end.
+Already done: C01–C04, C07, C6a, C09 part A (`pytest -q` 250 passed, `pytest -m ui` 20 passed).
+
+---
+
+## The 3-day sequence
 
 ```
-CoCo                                     Claude Code
-────                                     ───────────
-B01  database, schemas          ║   C01  API references
-B02  roles, grants   →art 01    ║   C02  data access layer (mock + live branches)
-B03  source tables              ║   C03  Streamlit app, 5 tabs (mock-driven)
-B04  data generation            ║   C04  test suite (written; artifacts become fixtures)
-B05  verify          →art 02    ║   C05  demo script, README
-B06  tags, masking              ║
-B07  governed views  →art 03 ───╫──►  C6a  reconcile columns + masking
-B07b persona procs   →art 04 ───╫──►       vs CONTRACT §6, §7
-B08  semantic view   →art 05/06 ╫──►  C6b  reconcile metrics + dimensions
-B09  verified queries           ║          real values replace mocks
-B10  Cortex Agent    →art 07/08 ╫──►  C6c  write agent parser vs REAL JSON
-B11  consistency     →art 09    ║          build Tab 2 proof grid
-B12  DMFs            →art 10    ║
-B13  contract audit  →art 11    ║
-B14  MCP server (product feature, for judges)
-B15  deploy app to SiS          ║
-B16  differentiation            ║
-B17  security review            ║
+Day 1  CoCo   B08b spec + CR-006 + references ──┐
+       CoCo   B09 semantic view v2 → B09a generator + name search
+       Claude C09 app pass │ C08 generator ◄────┘ (critical) │ C10 quality SQL │ C11 eval set
+Day 2  CoCo   B08c run C08 + CONFORMED + regenerate view  ◄── C08
+       CoCo   B09 captures art 05/06/09 ──────────────► Claude C6b
+       CoCo   B12 run C10 → art 10 ; B10 agent, run C11 → art 07/08 ──► Claude C6c
+       Claude C12 scale harness ; C13 live-test refresh
+Day 3  CoCo   B13 run C12 on a clone → art 12
+       CoCo   B14 run C13 (pytest -m live) + security → art 11
+       CoCo   B15 cost controls + deploy             Claude C05 docs, fixes, C14 stretch
 ```
 
-**First artifact unlock is at B07 — about 40% through CoCo's queue.**
+Critical path: **B08b → C08 → B08c → regenerate → B09 captures → B10 → B15**.
 
-### What CoCo does that Claude cannot
+### Who does what
 
-| Action | Why |
-|--------|-----|
-| Run any SQL | Claude has no Snowflake credentials |
-| Capture artifacts | Requires live query execution |
-| Deploy the Streamlit app | Requires Snowflake write access |
+| CoCo | Claude Code |
+|------|-------------|
+| Specs, contract, core design (semantic view, generator, `CONFORMED`, agent) | Every file that can be written offline, **including Snowflake SQL** |
+| Runs all of Claude Code's SQL and writes the run reports | App, tests, deploy script, docs, demo |
+| All artifact captures | Data generator, data-quality SQL, data-health tool, eval set, scale harness |
+| Deploy, cost controls, security review | Agent response parser, proof grid, stretch router |
 
-### What Claude does that CoCo does not
-
-| Action | Why |
-|--------|-----|
-| Build the app, tests, docs | It is faster at application scaffolding |
-| Parse the real agent JSON | It owns the response-handling code |
-
-### Genuinely sequential residue
-
-| Item | Why unavoidable |
-|------|----------------|
-| Artifact capture | Objects must exist before a query can run |
-| SiS deployment | Needs semantic view + agent deployed |
-| Final demo rehearsal | Needs the whole stack |
-
-Everything else overlaps.
+No-collision rules (one owner per file; the handoff lock; interfaces fixed first):
+`.agents/tasks/COCO_TASKS.md` § "Working with Claude Code".
 
 ---
 
@@ -108,22 +104,26 @@ Everything else overlaps.
 | B01 | Database, schemas, warehouse | ✅ |
 | B02 | Roles and grants | ✅ |
 | B03 | Source tables (9) | ✅ |
-| B04 | Data generation | ✅ |
+| B04 | Data generation (v1, small and clean) | ✅ |
 | B05 | Distribution verification | ✅ |
 | B06 | Tags and masking policies | ✅ |
 | B07 | Governed views (9) → art 03 | ✅ |
 | B07b | Persona sample procedures (3) → art 04 | ✅ |
-| B07c | MCP read-only — **DEFERRED**, not needed | ⏸ |
-| B08 | Semantic view → art 05, 06 (+ `SP_METRICS_AS_*`) | ⬜ NEXT |
-| B09 | Verified queries, AI instructions | ⬜ |
-| B10 | Cortex Agent → art 07, 08 | ⬜ |
-| B11 | Cross-persona consistency → art 09 | ⬜ |
-| B12 | Data metric functions → art 10 | ⬜ |
-| B13 | Contract conformance audit → art 11 | ⬜ |
-| B14 | MCP server (product feature) | ⬜ |
-| B15 | Deploy app to SiS | ⬜ |
-| B16 | Differentiation artifacts | ⬜ |
-| B17 | SQL and security review | ⬜ |
+| B08 | Semantic view → art 05, 06 (+ `SP_METRICS_AS_*`) | ✅ |
+| B08b | Data spec v2 + context pack + CR-006 (Day 1) | 📝 delivered; CR-006 ✅ accepted (v1.5); gate: Claude Code's confirmation |
+| B08c | Run C08 + `CONFORMED` cleansing layer + regenerate view → art 03, 04 again (Day 2) | 🔒 needs C08 |
+| B09 | Semantic view v2: every business column, extra metrics, AI instructions, verified queries → art 05, 06, 09 (build Day 1, capture Day 2) | ⬜ NEXT |
+| B09a | Metadata-driven view generator + name search (Day 1) | ⬜ |
+| B10 | Cortex Agent (Analyst + chart + data-health tool); run C11 → art 07, 08 (Day 2) | ⬜ |
+| B12 | Run C10 (DMFs + `SP_DATA_HEALTH`) → art 10 (Day 2) | 🔒 needs C10 |
+| B08m | Move to the event account: trial move Day 2, cutover end of Day 3 | 🔒 needs the user's new account + connection |
+| B13 | Run C12 scale harness on a clone → art 12 (Day 3, old account) | 🔒 needs C12 |
+| B14 | Run C13 live tests + security review → art 11 (2 Oct, new account) | 🔒 needs C13 |
+| B15 | Cost controls + deploy (2 Oct, new account) | ⬜ |
+| — | Stretch: governed splitter for the router, lineage trace | ⬜ only if time is left |
+
+Removed on 2026-09-29: B07c and the old B14 (MCP dropped), B11 (merged into B09), B16
+(merged into B10/B13), B17 (merged into B14).
 
 ### Claude Code
 
@@ -133,13 +133,20 @@ Everything else overlaps.
 | C02 | Data access layer (mock-backed) | ✅ |
 | C03 | Streamlit app (guided story + Explore), Revision 2 | ✅ |
 | C04 | Test suite | ✅ |
-| C05 | Demo script, README | ⬜ NEXT |
 | C07 | CI tests on GitHub + one-command deploy script | ✅ |
-| C6a | Reconcile governed layer | ⏸ card written, on hold by user (v1.4 config string done; first check: 0 mismatches) |
-| C6b | Reconcile semantic layer | 🔒 needs art 05, 06 |
-| C6c | Agent parser + proof grid | 🔒 needs art 07–09 |
+| C6a | Reconcile governed layer | ✅ art 03/04: 0 mismatches (re-check after B08c) |
+| C09 | App production pass (Day 1–2) | 🔄 part A ✅ 29 Sep (250 + 20 UI tests); part B (as-of date, `SP_DATA_HEALTH`, MCP) waits for the spec |
+| C08 | Realistic data generator in `data_gen/` (Day 1, critical path) | ⬜ unblocked: `docs/DATA_SPEC.md` landed |
+| C10 | Data-quality SQL + `SP_DATA_HEALTH` in `quality/` (Day 1–2) | ⬜ unblocked (DATA_SPEC §7.2) |
+| C11 | Evaluation set + runner in `eval/` (Day 1–2) | ⬜ unblocked (DATA_SPEC §7.3) |
+| C6b | Reconcile semantic layer (Day 2) | 🔒 wait for the re-captured art 05/06 (B09) |
+| C12 | Scale-test harness in `tests/scale/` (Day 2) | ⬜ unblocked (DATA_SPEC §7.4) |
+| C6c | Agent parser + proof grid; flip to live (Day 2) | 🔒 needs art 07–09 |
+| C13 | Live-test refresh for the audit (Day 2–3) | 🔒 needs CR-006 |
+| C05 | Demo script, talking points, README, core-scalability doc (Day 3) | 📝 card written; scheduled for Day 3 |
+| C14 | Stretch: parallel multi-part router + KPI shortcut (Day 3) | ⬜ only if time is left |
 
-Legend: ⬜ todo · 🔄 in progress · ✅ done · 🔒 waiting on artifact · ⏸ deferred
+Legend: ⬜ todo · 📝 planned (card written) · 🔄 in progress · ✅ done · 🔒 waiting on artifact · ⏸ deferred
 
 ---
 
@@ -149,6 +156,7 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · 🔒 waiting on artifact · 
 
 ```
 CoCo runs live query  →  commits real output to docs/artifacts/  →  Claude verifies
+Claude writes data_gen/ SQL  →  CoCo reviews and runs it  →  CoCo captures the results
 ```
 
 Why this was necessary:
@@ -157,12 +165,8 @@ Why this was necessary:
 - `snow` CLI is not installed
 - No secrets stored
 
-**Nothing is required from the user.** If artifacts later prove insufficient, Claude Code
-raises it in `.agents/HANDOFF.md` under `## Blocked`, and only then do we consider a
-read-only PAT (CoCo's deferred B07c).
-
-> The MCP server at **B14** is unaffected — it is a product feature demonstrated to judges,
-> not a development dependency. Those two concerns are now separate.
+**Nothing is required from the user.** If artifacts prove insufficient, Claude Code raises
+it in `.agents/HANDOFF.md` under `## Blocked`.
 
 ---
 
@@ -174,3 +178,6 @@ read-only PAT (CoCo's deferred B07c).
 4. `docs/CONTRACT.md` is binding. Deviations → Change Request in §11 + tell the user.
 5. Append to `docs/SESSION_LOG.md` when you stop working.
 6. Do not commit or push. The user does that.
+7. Every card keeps the 9 core system rules at the top of `.agents/tasks/COCO_TASKS.md`.
+8. One owner per file. Claude Code's SQL goes through the handoff lock ("Ready for CoCo to
+   run" in `.agents/HANDOFF.md`).

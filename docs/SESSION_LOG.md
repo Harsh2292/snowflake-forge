@@ -26,6 +26,325 @@
 
 ---
 
+## Session 24 — 2026-09-29 — CoCo
+
+**Milestone**: M3 (replan, Day 1)
+**Build steps completed**: B08b delivered (gate waits for the user's CR-006 approval and Claude Code's confirmation)
+**Credits used this session**: ~22.5 Cortex Code credits (~$45; main session plus 2 doc subagents)
+and ~1.35 warehouse credits (~$4). The earlier "< 0.05" counted the warehouse only and was wrong.
+See the credit check below.
+
+### Done
+- Planned B08b in plan mode. The user chose the time rule: **trailing 12 months** for flow
+  metrics and the **latest snapshot** for DOI. Wrote card `coco/B08b_data_spec.md`.
+- **`docs/DATA_SPEC.md`** (new, ~850 lines):
+  - source DDL v2 (10 tables, incl. `ERP_SOURCE.TCURR`)
+  - volumes (~650K orders, ~2M lines at SF 1) and realism rules
+  - the mess catalogue: 7 repairable defects + 13 edge cases, each with its rate, rule and
+    tolerance, plus the code map
+  - the `CONFORMED` contract, the time rule and the metric targets
+  - determinism rules
+  - the interfaces: generator procedures, `SP_DATA_HEALTH`, eval set and runner, scale harness
+- **CR-006 (PROPOSED)** in `CONTRACT.md` §11:
+  - new §3 definition strings and a §3a time rule; §5 patterns and the §8 query get the window
+  - new FQNs; MCP removed; 10 source tables; additive semantic-view content
+- **Context pack** in `docs/references/`:
+  - `snowflake_execution_notes.md` (CoCo, live-verified)
+  - 6 fetched-doc files, drafted by 2 subagents and reviewed
+  - README index rows
+- **Live findings (read-only)**:
+  - Enterprise edition
+  - every v1 source column is `NOT NULL`, and IDs are `VARCHAR(10)`: both fixed in DDL v2
+  - the SQL tool doesn't keep session variables or `USE ROLE` between calls
+  - compile-only doesn't check procedure bodies
+  - `RANDOM(seed)` is not reproducible (docs); the hash recipe gave identical checksums on
+    5M rows on 2 warehouses
+  - `SEMANTIC_VIEW WHERE` accepts the 12-month window and a latest-snapshot subquery
+  - `GET_QUERY_OPERATOR_STATS` gives pruning counts
+  - a custom DMF compiles
+
+### Credit check (2026-09-29, from ORGANIZATION_USAGE / ACCOUNT_USAGE)
+- **Allowance**: $400 of free usage, from 2026-09-17 to **2026-10-18**. When the balance hits
+  zero or the end date passes, the account stops unless a card is added.
+- **Spent**: ~$138. Cortex Code is ~$118 (58.9 credits × $2), warehouses ~$20 (6.5 credits ×
+  $3), everything else < $1. **Left: ~$262.** `REMAINING_BALANCE_DAILY` shows $295.72 because it
+  lags today's usage.
+- **Spend per day**: 24 Sep $30, 25 Sep $19, 27 Sep $18, 28 Sep $14, 29 Sep ~$49 (so far).
+- **Projection to 2 Oct**:
+  - at ~$25/day: ~$100–120
+  - at ~$50/day (a heavy day like today): ~$200
+  - B13 scale proof: ~$6–10
+  - agent evals: ~$5–15
+  - DT/DMF/Search background: ~$1–3/day
+- **Outcome**: enough to finish if CoCo stays lean, but tight if every day is like today.
+- **After submission**: with schedules suspended, keeping the app live costs ~$1–3/day. The hard
+  limit is **18 Oct**, not the balance.
+- **Levers**:
+  - lean CoCo sessions (the main cost)
+  - COMPUTE_WH auto-suspend 600 s → 60 s
+  - a resource monitor for warehouses and an account budget alert for everything else
+  - DT target lag ≥ 1 h or DOWNSTREAM
+  - DMFs on TRIGGER_ON_CHANGES or a daily cron
+  - Cortex Search TARGET_LAG 1 day
+  - B13 on MEDIUM for ≤ 30 min, then drop the clone
+  - suspend all schedules after submission
+
+### Also done this session (after B08b)
+- **Credit check** (above). Corrected the stale budget line in `COCO.md`.
+- **Account switch plan**, user-approved, in `COCO.md` ("Account switch plan"), with:
+  - a new B8m entry in `COCO_TASKS.md` and the B08m row in `.agents/NEXT.md`
+  - a HANDOFF note to Claude Code: scripts must re-run cleanly on an empty account and must
+    not name the account
+  - the timeline: build in the old account until the end of 1 Oct (incl. B13); B08m trial
+    move 30 Sep; cutover at the end of 1 Oct; B14/B15 on 2 Oct in the new account
+- **New event account created** by the user and added as a VS Code connection. Read-only
+  checks only:
+  - region Azure Central India, same Snowflake version, `CORTEX_ENABLED_CROSS_REGION =
+    ANY_REGION`
+  - edition not confirmed (needs ORGADMIN; the user can check it in Snowsight)
+  - nothing was created there; the account details get recorded at B08m, as the user asked
+- **CR-006 ACCEPTED** by the user and applied in the `CONTRACT.md` body as **v1.5** (§1,
+  §3, §3a, §4, §5, §7, §8, §10). Added one line: metrics with different default windows need
+  separate `SEMANTIC_VIEW` calls. Updated NEXT, HANDOFF, the B08b card and COCO_TASKS.
+  HANDOFF asks Claude Code to update the "v1.4; CR-006 pending" line in `CLAUDE.md`.
+
+### Blocked / Open
+- ~~CR-006 needs the user's approval~~ ✅ accepted (v1.5).
+- Claude Code to confirm in HANDOFF that DATA_SPEC is implementable (B08b gate 2).
+- The user to confirm the new account's edition is Enterprise (Snowsight → Admin → Accounts).
+
+### Next action (exact)
+- **New CoCo session** on the old connection `tyduokn-gf25237`: B09 (semantic view v2, by
+  hand, on today's data), then B09a. B08c when C08 is READY. B08m trial move on 30 Sep.
+- Claude Code: C08 (critical path; READY by end of Day 1), C09 part B (unblocked by v1.5),
+  C10, C11.
+
+---
+
+## Session 23 — 2026-09-29 — Claude Code
+
+**Milestone**: M6 (app production pass), Day 1 of the replan
+**Build steps completed**: C09 part A ✅
+**Credits used this session**: 0 (no Snowflake access)
+
+### Done
+- Read the replan (CLAUDE.md, NEXT, HANDOFF, CLAUDE_TASKS, COCO_TASKS, ROADMAP, ADR-008).
+  My questions were answered in HANDOFF: deadline 4 Oct (work done by 2 Oct), the
+  scalability-doc prompt, §10 practice values via CR-006.
+- Updated my HANDOFF section for the replan; wrote the C09 card; the user approved it.
+- **Built C09 part A**:
+  - `NULL` handled everywhere (`config.as_number`, "—" with a reason; JSON NaN safety net
+    in `view.build`)
+  - Explore "By order status"
+  - long results capped (agent tables 500 rows + true counts; 12 bars; the most recent 12
+    for time series)
+  - an honest source badge, and fallbacks never cached
+  - query tags per path
+  - replay of all 55 art 05 pairings and the whole app in live mode
+- Fixed the pairing contract test, which rejected the `NULL`s real Snowflake returns.
+- `pytest -q` 250 passed, 112 skipped; `pytest -m ui` 20 passed; screenshots checked in
+  light and dark.
+
+### Blocked / Open
+- `docs/DATA_SPEC.md` + CR-006 (CoCo B08b) not landed yet: C08 (critical path), C09 part B,
+  C10 and C11 wait for them.
+- Query tags under owner's rights: CoCo checks at B15.
+
+### Next action (exact)
+- When `docs/DATA_SPEC.md` lands: plan C08, write its card, get approval, build it, and
+  list it in "Ready for CoCo to run" by the end of 29 Sep.
+
+---
+
+## Session 22 — 2026-09-29 — CoCo
+
+**Milestone**: M3 (replan)
+**Build steps completed**: none (a user-approved replan of the remaining queue)
+**Credits used this session**: small (one read-only profiling query)
+
+### Done
+- **Replanned the rest of the project with the user.** Goal: 3 days to production-ready
+  and deployed. The core system (question → agent → semantic view → SQL → governed data →
+  answer) must stay correct, fast and cheap from today's data to billions of rows, and while
+  data changes. Only infrastructure knobs change with scale.
+- **Profiled the live source data**: 1 year of orders, 30 days of inventory, 0 orphans,
+  0 duplicates, 0 NULLs, 0 impossible values, one spelling per code, no currencies. It's
+  clean and small, not realistic.
+- **The user's decisions**:
+  - Claude Code writes seeded SQL generators in `data_gen/`; CoCo reviews and runs them
+  - both repairable mess and business-rule edge cases
+  - 10 years at moderate size in the main DB, plus a scale proof on a clone
+  - MCP dropped
+  - the parallel multi-part router is a stretch item only
+- **Rewrote `.agents/tasks/COCO_TASKS.md`**:
+  - 9 core system rules at the top, and a 3-day plan
+  - new steps B08b (data spec + CR-006), B08c (load + `CONFORMED` layer), B09 v2, B10
+    (agent + evaluation set), B12, B13 (scale proof), B14 (audit + security), B15 (hardening
+    + deploy)
+  - removed: B07c, MCP, B11 (merged into B09), B16, B17
+- **Updated**:
+  - `.agents/NEXT.md` (new sequence and progress)
+  - `.agents/HANDOFF.md`: the replan and requests to Claude Code (take ownership of
+    `data_gen/`, C08 generator, C09 app pass, C6b to wait for the re-capture, stretch
+    router), plus the new artifact stages
+  - `docs/artifacts/README.md` (schedule, MCP upgrade path removed)
+  - `docs/MILESTONES.md` (M3–M6 redefined)
+  - `docs/LLD.md` (§7a dropped, §8 re-aligned)
+  - `.agents/DECISIONS.md` (ADR-008; ADR-007 superseded)
+- **New `docs/ROADMAP.md`**: post-hackathon productization, parked and gated on customer
+  demand (source adapters, configurable metrics, per-user identity, Native App packaging,
+  scale and cost, operations).
+- **Deleted 5 TODO-only placeholders**: `mcp/01_mcp_server.sql`,
+  `semantic/supply_chain.yaml`, `semantic/verified_queries/canonical_metrics.yaml`,
+  `agent/supply_chain_agent.yaml`, `sql/05_quality/dmf_checks.sql`. All are recoverable
+  from git; nothing referred to them.
+
+### Blocked / Open
+- C08 (Claude Code) is on the critical path and needs `docs/DATA_SPEC.md` from B08b.
+- Contract body unchanged; CR-006 is written at B08b for the user's approval.
+
+### Next action (exact)
+- CoCo: **B08b**. Plan it, write the card `coco/B08b_data_spec.md`, write
+  `docs/DATA_SPEC.md` and CR-006.
+- Claude Code: read the replan in HANDOFF; write the C08/C09 cards; start C09 now and C08
+  once `DATA_SPEC.md` lands.
+
+### Later the same session: the work split re-done (user-approved)
+- **The user's decisions**:
+  - expose every governed business column in the one semantic view, as long as it stays
+    fast
+  - build a metadata-driven view generator now
+  - include a Cortex Search service on names and a data-health tool for the agent
+  - Claude Code takes on more work, including writing Snowflake SQL
+- **Checked Claude Code's answer on "dynamic" semantic views.** Mostly right. Two
+  corrections: B08 is already done (the expansion is B09), and splitting the view by domain
+  would break cross-system questions (Cortex Agents don't join across semantic views).
+- **Verified live with `cortex analyst query`**: Analyst aggregates exposed facts without
+  a named metric. "Total landed cost by carrier" became `SUM(freight + duty + handling)`,
+  and "shipments per carrier" became an ad-hoc `COUNT`.
+- **Rewrote**:
+  - `.agents/tasks/COCO_TASKS.md`: the new split, the ownership table, the handoff lock, B8b
+    (+ context pack + interfaces), new B9a (generator + name search), B9 expansion scope and
+    speed gate, and B10/B12/B13/B14 now run Claude Code's files
+  - `.agents/tasks/CLAUDE_TASKS.md` (with the user's permission): C08–C14 with inputs,
+    outputs, acceptance checks and references; done tracks kept as history
+  - `CLAUDE.md` Boundaries (with the user's permission): new folders `data_gen/`, `quality/`,
+    `eval/`, `tests/scale/`; writes SQL, never runs it; the handoff lock
+  - `.agents/NEXT.md`, `.agents/HANDOFF.md` (+ the shared "Ready for CoCo to run" table),
+    `docs/artifacts/README.md` (`runs/` reports), `docs/MILESTONES.md` (owners)
+
+### Next action (exact, supersedes the above)
+- CoCo: **B08b**. Plan it, write the card, then `docs/DATA_SPEC.md`, the reference files in
+  `docs/references/`, and CR-006.
+- Claude Code: read HANDOFF "Latest from CoCo" and `CLAUDE_TASKS.md`; plan and start
+  **C09** now; C08, C10, C11 once `DATA_SPEC.md` lands.
+
+---
+
+## Session 21 — 2026-09-28 — CoCo
+
+**Milestone**: M3 (semantic layer)
+**Build steps completed**: B08 (semantic view, art 05/06, `SP_METRICS_AS_*`)
+**Credits used this session**: small (about 180 `SEMANTIC_VIEW` queries on `FORGE_WH` XS)
+
+### Done
+- Wrote and approved the card `.agents/tasks/coco/B08_semantic_view.md`.
+- **`SEMANTIC.SUPPLY_CHAIN_SV`** (`semantic/01_semantic_view.sql`), created by `FORGE_ADMIN`:
+  - 9 tables, 10 relationships, 24 dimensions (§4's 23 plus `orders.order_week`), 4 metrics with synonyms and §3 comments.
+  - Built in 4 stages; each stage's metric matched B07 exactly.
+  - CR-005 is implemented with two `PRIVATE` facts on `order_lines` that read `orders.order_status`, so no CR was needed.
+- **`SELECT` on the view** granted to the 3 persona roles (`COPY GRANTS` keeps it across re-runs).
+- **`GOVERNED.SP_METRICS_AS_{PLANNER,BUYER,LOGISTICS}()`** (`sql/04_governance/05_persona_metric_procedures.sql`): owner's rights, owned by the persona roles, `USAGE` to `FORGE_ADMIN`.
+- **Art 05** `05_metric_values.json`: 4 overall values plus the 55 valid pairings in full. SHA-256 `02eb2c2e…b814b2a5` matches Snowflake.
+- **Art 06** `06_dimension_matrix.md`: 96 cells, with pass/fail and the error text.
+- **Gate, all 7 checks pass** (see the card):
+  - OTD 0.873973, fill rate 0.926485, DOI 28.499215, landed cost 518.971250, identical to 6 dp across the view (as `FORGE_ADMIN` and each persona alone) and the 3 procedures.
+  - 55/55 valid pairings pass.
+  - DOI × `orders.*`/`shipments.*` are rejected by Snowflake (9/9).
+
+### Blocked / Open
+- **`suppliers.*` × fill rate / DOI runs but fans out** through `sourcing`. It's not a §4 pairing, so the contract is unaffected. Carried into B09's `AI_SQL_GENERATION`.
+- **Data observations, recorded in art 06 for C6b**: shipments cover 6 of 12 plants, and fill rate is exactly 1.000 for 3 of the 6 categories.
+
+### Next action (exact)
+- CoCo: B09. Plan it and write the card `B09_verified_queries.md`, then add the AI instructions and the 8 verified queries to `SUPPLY_CHAIN_SV`.
+- Claude Code: C6b is unlocked (art 05/06).
+
+---
+
+## Session 20 — 2026-09-28 — Claude Code
+
+**Milestone**: M6 (planning the demo and submission docs)
+**Build steps completed**: C05 card written (not built)
+**Credits used this session**: 0
+
+### Done
+- Wrote `.agents/tasks/claude/C05_demo_readme.md`. It covers a timed 5-minute
+  `demo/demo_script.md` over the real app screens, `demo/talking_points.md`, the repo
+  `README.md`, and README screenshots. Pass 1 happens now (provisional numbers); pass 2
+  after C6b/C6c and B15 (final numbers, live screenshots, a timed rehearsal).
+- Found: the current `demo/demo_script.md` describes the old tabbed app (persona
+  dropdown, "Consistency Proof" tab) and column names that don't exist. There is no
+  `README.md` yet.
+- Noted a dependency: `USE_MOCK_DATA` must be flipped (C6b/C6c) and the app redeployed
+  before the video is recorded.
+
+- **The user deferred C05 until all other tasks are complete.** The card stays as
+  written, and approval is asked again then.
+
+### Blocked / Open
+- C6b is waiting for art 05/06 (CoCo B08, in progress).
+- Before C05: the user confirms the Hack2Skill submission rules (video length limit,
+  upload location, deadline with time zone, README/repo requirements).
+
+### Next action (exact)
+- When art 05/06 land: plan C6b, write its card, and get approval.
+
+---
+
+## Session 19 — 2026-09-28 — Claude Code
+
+**Milestone**: M3 (Stage 1 reconciled)
+**Build steps completed**: C6a ✅
+**Credits used this session**: 0 (no Snowflake access; everything offline)
+
+### Done
+- **C6a approved by the user and built.** Art 03 and art 04 match the contract, with 0
+  mismatches, so no Change Request is needed.
+- `config.py`: added `SAMPLE_COLUMNS` (§5.4) and `GOVERNED_COLUMNS` (§7). Unit tests
+  compare both with the contract's table text.
+- `tests/conftest.py`:
+  - `artifact` fixture: loads `docs/artifacts/*`, and skips while a file is missing.
+  - `ReplaySession`: answers the `SP_SAMPLE_AS_*` calls with art 04's rows, typed like
+    Snowpark (`Decimal`, `None`).
+  - A `[replay]` mode for the `forge` fixture.
+- `tests/governance/test_masking.py`: every §6 row now also runs as `[replay]`.
+- `tests/artifacts/test_stage1_governed.py`, 16 tests:
+  - Art 03: view columns and order, masking policy placement, promised date only on
+    `V_SHIPMENT`.
+  - Art 04: procedure owners, §5.4 columns and types, identical record IDs, caller role.
+  - Practice data equals art 04 through the live path.
+  - The Same screen chips and the rows drawer follow the real rows.
+- `mock_data.masking_sample()` now returns the real captured rows, masked per §6.
+- The **Same screen's rows drawer** was redesigned, with the user's choice. With real
+  data, the 10-column tables wrapped names onto 5 lines and cut off the email column. It
+  now shows one record, the three teams side by side, with Record 1/2/3 buttons. Masked
+  values read "hidden", "restricted" or "masked" with a lock icon. The browser test checks
+  for no sideways overflow and switches records.
+- Break-it check (scratchpad, not committed): 10 errors planted in copies of art 03/04,
+  and each turned a test red.
+- `pytest -q` 227 passed, 112 skipped (live). `pytest -m ui` 18 passed. Screenshots checked
+  in light and dark.
+
+### Blocked / Open
+- C6b needs art 05/06 (CoCo B08). C6c needs art 07–09.
+
+### Next action (exact)
+- C05: plan the demo script and README, write `.agents/tasks/claude/C05_*.md`, and get
+  approval.
+
+---
+
 ## Session 18 — 2026-09-27 — CoCo
 
 **Milestone**: M2 (Governance Layer) complete

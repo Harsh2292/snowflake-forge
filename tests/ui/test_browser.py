@@ -1,9 +1,11 @@
 """The app in a real browser: every screen in light and dark, and the in-view interactions
 that unit tests can't see inside the HTML views (C03). Run with `pytest -m ui`."""
 
+import re
+
 import pytest
 
-from app_driver import HEADINGS, expect
+from app_driver import HEADINGS, SCREENSHOTS, expect
 from utils import config
 
 pytestmark = pytest.mark.ui
@@ -65,8 +67,18 @@ def test_same_metric_tile_updates_all_three_persona_cards(app):
     expect(view.locator(".banner")).to_contain_text("fill rate")
     view.get_by_role("button", name="See the rows each team gets").click()
     drawer = view.get_by_role("dialog")
-    expect(drawer.locator(".h3")).to_have_text([config.PERSONA_LABELS[p] for p in config.PERSONA_ROLES])
-    expect(drawer).to_contain_text("*** MASKED ***")
+    expect(drawer.locator("thead th")).to_have_text(["", *[config.PERSONA_LABELS[p] for p in config.PERSONA_ROLES]])
+    # the real captured rows (artifact 04, C6a), one record at a time, no sideways scroll
+    for text in ["MAT000001", "2/10 NET30", "Beacon Global Logistics - Division 001", "masked", "restricted"]:
+        expect(drawer).to_contain_text(text)
+    drawer.get_by_role("button", name="Record 2").click()
+    expect(drawer).to_contain_text("Crestview Automotive Group - Division 002")
+    expect(drawer).not_to_contain_text("MAT000001")
+    expect(drawer).not_to_contain_text("&rsquo;")  # text is escaped, so no HTML entities in it
+    table = drawer.locator("table")
+    assert table.evaluate("t => t.scrollWidth <= t.parentElement.clientWidth + 1"), "record table overflows"
+    app.page.wait_for_timeout(600)  # the drawer slides in
+    app.page.screenshot(path=SCREENSHOTS / f"{app.theme}-same-drawer.png")
     app.assert_no_errors()
 
 
@@ -87,6 +99,27 @@ def test_explore_disables_impossible_breakdowns_focuses_bars_and_shows_a_table(a
     bars = view.locator(".barrow").count()
     view.locator("#table-switch").click()
     expect(view.locator("table.tbl tbody tr")).to_have_count(bars)
+    app.assert_no_errors()
+
+
+def test_explore_shows_missing_values_as_a_dash_with_the_reason(app):
+    """C09: fill rate has no value for OPEN and CANCELLED orders (CR-005). They show "—",
+    last, with a note, never NaN or a crash."""
+    expect(app.page.locator(".sf-tag")).to_have_text("Mock data")
+    view = app.go("explore")
+    view.locator("#t-fill_rate").click()
+    view.locator("#d-status").click()
+    values = view.locator(".barrow .v")
+    expect(values).to_have_count(4)
+    assert [v.strip() for v in values.all_inner_texts()[2:]] == ["—", "—"]
+    expect(view.locator(".barrow .v span[title]").first).to_have_attribute("title", re.compile("No value"))
+    expect(view.locator("article")).to_contain_text("leaves out open and cancelled orders")
+    view.locator(".barrow").nth(3).click()
+    expect(view.locator("aside")).to_contain_text("No value")
+    view.locator("#table-switch").click()
+    expect(view.locator("table.tbl")).not_to_contain_text("NaN")
+    app.page.wait_for_timeout(300)
+    app.screenshot(f"{app.theme}-explore-missing")
     app.assert_no_errors()
 
 

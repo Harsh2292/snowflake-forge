@@ -4,14 +4,16 @@ ACTIONS.tab = (t) => setState({ tab: t });
 
 function miniChart(chart) {
   if (!chart) return '';
-  const max = Math.max(...chart.rows.map((r) => r.value)) * 1.15;
+  const max = Math.max(...chart.rows.map((r) => r.value).filter((v) => !missing(v))) * 1.15;
+  const h = (v) => missing(v) ? 0 : (v / max) * 120;
   return `<div class="stack gap8 mt16" role="img" aria-label="${esc(chart.title)}">
     <div style="display:flex;align-items:flex-end;gap:14px;height:150px;padding:0 4px;border-bottom:1px solid var(--line)">
-      ${chart.rows.map((r) => `<div class="stack" style="flex:1;align-items:center;justify-content:flex-end;height:100%;gap:6px" title="${esc(r.label)}: ${fmt(chart.format, r.value)}">
-        <span class="small num" style="font-weight:600">${fmt(chart.format, r.value)}</span>
-        <span style="width:min(56px,100%);height:${(r.value / max) * 120}px;background:var(--bar);border-radius:4px 4px 0 0"></span></div>`).join('')}
+      ${chart.rows.map((r) => `<div class="stack" style="flex:1;align-items:center;justify-content:flex-end;height:100%;gap:6px" title="${esc(r.label)}: ${missing(r.value) ? MISSING_NOTE : fmt(chart.format, r.value)}">
+        <span class="small num" style="font-weight:600">${valueHtml(chart.format, r.value)}</span>
+        <span style="width:min(56px,100%);height:${h(r.value)}px;background:var(--bar);border-radius:4px 4px 0 0"></span></div>`).join('')}
     </div>
     <div style="display:flex;gap:14px;padding:0 4px">${chart.rows.map((r) => `<span class="small ink2" style="flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.label)}</span>`).join('')}</div>
+    ${chart.total > chart.rows.length ? `<span class="small muted">${chart.rows.length} of ${chart.total} rows</span>` : ''}
   </div>`;
 }
 

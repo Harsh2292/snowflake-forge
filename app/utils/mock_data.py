@@ -2,8 +2,8 @@
 
 Contract fixtures (MOCK_METRICS, MOCK_BY_REGION) are used verbatim. Anything the
 contract doesn't fix is generated deterministically inside the §3 ranges and labelled
-with obviously synthetic names (MOCK-PLANT-01, ...). Once CoCo's artifacts land (B05,
-B08), real captured values replace these.
+with obviously synthetic names (MOCK-PLANT-01, ...). Once CoCo's artifacts land, real
+captured values replace these (the persona samples already use artifact 04).
 """
 
 import zlib
@@ -53,16 +53,27 @@ def metric_value(metric_key: str, dimension=None, member=None) -> float:
     return round(value, 4 if high <= 1 else 2)
 
 
+# By order status, the real data (art 05) has no value for fill rate on OPEN and CANCELLED
+# orders (NULL by definition, CR-005), and shipment metrics only for orders that shipped.
+_UNSHIPPED = {"OPEN", "CANCELLED"}
+
+
 def metric_frame(metric_key: str, dimension=None) -> pd.DataFrame:
     metric_col = config.column_name(config.METRICS[metric_key]["id"])
     if dimension is None:
         return pd.DataFrame({metric_col: [metric_value(metric_key)]})
     dim_col = config.column_name(dimension)
     members = dimension_values(dimension)
+    no_value = set()
+    if dimension == "orders.order_status":
+        if config.METRICS[metric_key]["id"].startswith("shipments."):
+            members = [m for m in members if m not in _UNSHIPPED]
+        elif metric_key == "fill_rate":
+            no_value = _UNSHIPPED
     return pd.DataFrame({
         dim_col: members,
-        metric_col: [metric_value(metric_key, dimension, m) for m in members],
-    })
+        metric_col: [None if m in no_value else metric_value(metric_key, dimension, m) for m in members],
+    }).astype({metric_col: float})
 
 
 def all_metrics_frame() -> pd.DataFrame:
@@ -77,24 +88,42 @@ def persona_metrics_row(persona: str) -> dict:
     return row
 
 
+# The rows SP_SAMPLE_AS_* really return, unmasked where some persona sees them (artifact
+# 04_persona_outputs.json, B07b). Copied because the deployed app can't read docs/;
+# tests/artifacts checks that they still match.
+_SAMPLE_ROWS = [
+    # part, unit cost, supplier, payment terms, customer, customer name, contract price, email
+    ("MAT000001", 42.01, "SUP00001", "2/10 NET30", "CUST00001",
+     "Beacon Global Logistics - Division 001", 40.33, "accounts.payable001@clientcorp.com"),
+    ("MAT000002", 79.02, "SUP00002", "2/10 NET30", "CUST00002",
+     "Crestview Automotive Group - Division 002", 76.65, "accounts.payable002@clientcorp.com"),
+    ("MAT000003", 116.03, "SUP00003", "2/10 NET30", "CUST00003",
+     "Delta Energy Dynamics - Division 003", 113.71, "accounts.payable003@clientcorp.com"),
+]
+
+
 def masking_sample(persona: str) -> pd.DataFrame:
-    """Contract §5.4 result shape (v1.3), with masking applied per the §6 matrix."""
-    buyer = persona == "Buyer"
-    rows = []
-    for i in range(1, 4):
-        rows.append({
-            "PERSONA": persona.upper(),
-            "SAMPLE_PART_ID": f"MOCK-PART-{i:02d}",
-            "UNIT_COST": round(40.0 + 17.5 * i, 2) if buyer else None,
-            "SAMPLE_SUPPLIER_ID": f"MOCK-SUP-{i:03d}",
-            "PAYMENT_TERMS": ["NET30", "NET45", "NET60"][i - 1] if buyer else "*** RESTRICTED ***",
-            "SAMPLE_CUSTOMER_ID": f"MOCK-CUST-{i:03d}",
-            "CUSTOMER_NAME": "*** MASKED ***" if buyer else f"Mock Customer {i}",
-            "CREDIT_LIMIT": None,
-            "CONTRACT_PRICE": round(36.0 + 15.25 * i, 2) if buyer else None,  # v1.3, CR-004
-            "CUSTOMER_EMAIL": "*** MASKED ***" if buyer else f"customer{i}@mock.example",
-        })
-    return pd.DataFrame(rows)
+    """Contract §5.4 result shape (v1.3): the captured rows, masked per the §6 matrix."""
+
+    def seen(matrix_row, value):
+        rule = config.MASKING_MATRIX[matrix_row][persona]
+        return value if rule == "visible" else rule
+
+    rows = [{
+        "PERSONA": persona.upper(),
+        "SAMPLE_PART_ID": part,
+        "UNIT_COST": seen("V_PART.unit_cost", cost),
+        "SAMPLE_SUPPLIER_ID": supplier,
+        "PAYMENT_TERMS": seen("V_SUPPLIER.payment_terms", terms),
+        "SAMPLE_CUSTOMER_ID": customer,
+        "CUSTOMER_NAME": seen("V_CUSTOMER.customer_name", name),
+        "CREDIT_LIMIT": seen("V_CUSTOMER.credit_limit", None),  # never captured unmasked
+        "CONTRACT_PRICE": seen("V_SOURCING.contract_price", price),
+        "CUSTOMER_EMAIL": seen("V_CUSTOMER.email", email),
+    } for part, cost, supplier, terms, customer, name, price, email in _SAMPLE_ROWS]
+    # NUMBER columns as float, NULL as NaN: what forge_data's live branch returns.
+    return pd.DataFrame(rows, columns=config.SAMPLE_COLUMNS).astype(
+        {"UNIT_COST": float, "CREDIT_LIMIT": float, "CONTRACT_PRICE": float})
 
 
 def quality_results() -> pd.DataFrame:

@@ -22,10 +22,22 @@ def _read(name: str) -> str:
     return (VIEWS / name).read_text(encoding="utf-8")
 
 
+def _json_safe(value):
+    """NaN and infinity become null. JSON.parse rejects NaN, so one stray NULL-as-NaN
+    from Snowflake would otherwise blank the whole screen."""
+    if isinstance(value, float) and value != value or value in (float("inf"), float("-inf")):
+        return None
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def build(name: str, data: dict, tokens: dict) -> str:
     """The full HTML document for one view (also used by tests)."""
     variables = ":root{" + ";".join(f"--{k.replace('_', '-')}:{v}" for k, v in tokens.items()) + "}"
-    payload = json.dumps(data, default=str).replace("</", "<\\/")
+    payload = json.dumps(_json_safe(data), default=str, allow_nan=False).replace("</", "<\\/")
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         f"<style>{FONT_FACES}{variables}{_read('base.css')}</style></head><body>"

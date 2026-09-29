@@ -30,6 +30,11 @@ PERSONA_METRIC_PROCS = {
     "Logistics": "SUPPLY_CHAIN_FORGE.GOVERNED.SP_METRICS_AS_LOGISTICS",
 }
 
+# Contract §5.4 (v1.3, CR-004): result columns of the sample procedures, in order.
+SAMPLE_COLUMNS = ["PERSONA", "SAMPLE_PART_ID", "UNIT_COST", "SAMPLE_SUPPLIER_ID",
+                  "PAYMENT_TERMS", "SAMPLE_CUSTOMER_ID", "CUSTOMER_NAME", "CREDIT_LIMIT",
+                  "CONTRACT_PRICE", "CUSTOMER_EMAIL"]
+
 # ── §2 Persona roles ─────────────────────────────────────────────────────────
 PERSONA_ROLES = {
     "Planner":   "PLANNER_ROLE",
@@ -140,6 +145,25 @@ MASKING_MATRIX = {
     "V_CUSTOMER.credit_limit":    {"Planner": None, "Buyer": None, "Logistics": None},
 }
 
+# ── §7 Governed view columns, in order ───────────────────────────────────────
+GOVERNED_COLUMNS = {
+    "V_SUPPLIER": ["supplier_id", "supplier_name", "country", "region", "supplier_tier",
+                   "lead_time_days", "reliability_score", "payment_terms", "email"],
+    "V_PART": ["part_id", "part_name", "category", "subcategory", "unit_cost", "weight_kg", "is_critical"],
+    "V_SOURCING": ["source_id", "supplier_id", "part_id", "is_primary", "contract_price"],
+    "V_PLANT": ["plant_id", "plant_name", "country", "region", "plant_type", "capacity_units"],
+    "V_INVENTORY": ["inventory_key", "plant_id", "part_id", "quantity_on_hand", "quantity_reserved",
+                    "reorder_point", "daily_usage", "snapshot_date"],
+    "V_CUSTOMER": ["customer_id", "customer_name", "email", "country", "region", "customer_segment",
+                   "credit_limit"],
+    "V_ORDER": ["order_id", "customer_id", "order_date", "order_status", "order_priority"],
+    "V_ORDER_LINE": ["line_id", "order_id", "part_id", "plant_id", "quantity_ordered",
+                     "quantity_shipped", "unit_price"],
+    "V_SHIPMENT": ["shipment_id", "order_id", "plant_id", "carrier", "ship_date",
+                   "promised_delivery_date", "actual_delivery_date", "freight_cost", "duty_cost",
+                   "handling_cost", "shipment_status"],
+}
+
 # ── §9 Canonical questions ───────────────────────────────────────────────────
 CANONICAL_QUESTIONS = [
     "What is our overall on-time delivery rate?",
@@ -185,5 +209,21 @@ def column_name(identifier: str) -> str:
     return identifier.split(".")[-1].upper()
 
 
+MISSING = "—"  # shown where Snowflake returns NULL: nothing in the group meets the definition
+
+
+def as_number(value):
+    """float, or None for NULL / NaN / empty. Snowflake returns NULL where a metric has
+    nothing to measure (e.g. fill rate for OPEN and CANCELLED orders, CR-005)."""
+    if value is None:
+        return None
+    try:
+        number = float(value)  # "" and pandas' NA raise here too
+    except (TypeError, ValueError):
+        return None
+    return None if number != number else number  # NaN is the only value unequal to itself
+
+
 def format_value(metric_key: str, value) -> str:
-    return FORMATS[METRICS[metric_key]["format"]]["py"].format(value)
+    number = as_number(value)
+    return MISSING if number is None else FORMATS[METRICS[metric_key]["format"]]["py"].format(number)

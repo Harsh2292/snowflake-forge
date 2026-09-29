@@ -51,11 +51,27 @@ def go(step: str) -> None:
 t = theme.tokens(st.session_state.dark)
 st.markdown(theme.page_css(t, st.session_state.step, []), unsafe_allow_html=True)
 
+# Build the screen's data first, so the header can say where it really came from.
+step = st.session_state.step
+data = None
+if step != "ask":
+    name, build, height, next_step = VIEWS[step]
+    data = build(forge_data.data_mode())
+notices = forge_data.pop_notices()
+if notices and step != "ask":
+    build.clear()  # never keep practice values in the cache: the next visit retries Snowflake
+
+
+def source_label() -> str:
+    if forge_data.data_mode() == "mock":
+        return "Mock data"
+    return "Practice values (Snowflake unreachable)" if notices else "Live"
+
+
 # ── Header: brand, the four-step story, tools and the theme switch ───────────
 brand, story, tools = st.columns([2.7, 5.0, 3.3], vertical_alignment="center")
 with brand:
-    mode = "Live" if forge_data.data_mode() == "live" else "Mock data"
-    html(f'<div class="sf-brand">{logo(t)}<span>Supply Chain Forge</span><span class="sf-tag">{esc(mode)}</span></div>')
+    html(f'<div class="sf-brand">{logo(t)}<span>Supply Chain Forge</span><span class="sf-tag">{esc(source_label())}</span></div>')
 with story:
     for col, (i, (key, label)) in zip(st.columns([1.15, 0.9, 1.45, 0.7]), enumerate(STEPS, start=1)):
         with col:
@@ -71,18 +87,16 @@ with tools:
 html(f'<div style="height:1px;background:{t["line"]};margin:6px 0 24px"></div>')
 
 # ── The current screen ───────────────────────────────────────────────────────
-step = st.session_state.step
 if step == "ask":
     ask.render(t, go)
 else:
-    name, build, height, next_step = VIEWS[step]
-    view.render(name, build(forge_data.data_mode()), t, height)
+    view.render(name, data, t, height)
     if next_step:
         _, right = st.columns([4, 1.25])
         with right:
             st.button(next_step[0], type="primary", key=f"next_{step}", on_click=go, args=(next_step[1],),
                       width="stretch")
 
-for notice in forge_data.pop_notices():
+for notice in notices + forge_data.pop_notices():
     st.toast(f"Couldn’t reach Snowflake for {notice.label}. Showing saved practice values.",
              icon=":material/cloud_off:")

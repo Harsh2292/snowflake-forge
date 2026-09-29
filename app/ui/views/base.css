@@ -102,6 +102,12 @@ button:disabled { cursor: not-allowed; }
   position: sticky; top: 0; background: var(--surface); }
 .tbl td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .tbl td.n, .tbl th.n { text-align: right; font-variant-numeric: tabular-nums; }
+/* one record, the three teams side by side (Same screen drawer) */
+.tbl.rec { table-layout: fixed; }
+.tbl.rec thead th:first-child { width: 132px; }
+.tbl.rec th[scope=row] { position: static; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl.rec td { overflow-wrap: break-word; }
+.tbl.rec tbody.protected tr:first-child > * { border-top: 2px solid var(--line); }
 .tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); color: var(--ink2); }
 
 /* Drawer (slides over the view; keeps the page height stable) */

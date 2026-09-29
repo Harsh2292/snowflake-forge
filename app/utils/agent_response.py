@@ -10,6 +10,10 @@ import re
 
 from . import config
 
+# Rows kept per result table. A 10-year daily breakdown is ~3,650 rows; the app shows at
+# most a dozen, and everything kept travels to the browser (SiS caps a message at 32 MB).
+MAX_TABLE_ROWS = 500
+
 
 def parse_agent_response(resp) -> dict:
     """Extract answer text, SQL, tables and lineage from a raw agent response.
@@ -25,7 +29,7 @@ def parse_agent_response(resp) -> dict:
     if not isinstance(resp, dict):
         return _empty(resp, status="unparseable")
 
-    texts, sqls, tables, tools = [], [], [], []
+    texts, sqls, tables, row_counts, tools = [], [], [], [], []
     verified = None
 
     for item in resp.get("content") or []:
@@ -49,11 +53,11 @@ def parse_agent_response(resp) -> dict:
                 if "verified_query_used" in payload:
                     verified = bool(payload["verified_query_used"])
                 if payload.get("result_set"):
-                    tables.append(result_set_to_records(payload["result_set"]))
+                    _add_table(tables, row_counts, payload["result_set"])
         elif kind == "table":
             result_set = (item.get("table") or {}).get("result_set")
             if result_set:
-                tables.append(result_set_to_records(result_set))
+                _add_table(tables, row_counts, result_set)
 
     sql = sqls[-1] if sqls else None
     return {
@@ -63,19 +67,28 @@ def parse_agent_response(resp) -> dict:
         "verified_query_used": verified,
         "tools_used": list(dict.fromkeys(tools)),
         "tables": tables,
+        "row_counts": row_counts,
         "warnings": resp.get("warnings") or [],
         "status": resp.get("status", "completed"),
         "raw": resp,
     }
 
 
-def result_set_to_records(result_set: dict) -> list[dict]:
-    """Turn a SQL-API ResultSet into a list of row dicts.
+def _add_table(tables: list, row_counts: list, result_set: dict) -> None:
+    """Keep the first MAX_TABLE_ROWS rows, and the table's true row count."""
+    rows = len(result_set.get("data") or [])
+    total = (result_set.get("resultSetMetaData") or {}).get("numRows")
+    row_counts.append(total if isinstance(total, int) and total >= rows else rows)
+    tables.append(result_set_to_records(result_set, limit=MAX_TABLE_ROWS))
+
+
+def result_set_to_records(result_set: dict, limit=None) -> list[dict]:
+    """Turn a SQL-API ResultSet into a list of row dicts (the first `limit` rows).
 
     Values arrive as strings, and `rowType` may be absent (the docs' own example omits
     it). In that case columns are named COL_1, COL_2, ...
     """
-    data = result_set.get("data") or []
+    data = (result_set.get("data") or [])[:limit]
     row_type = (result_set.get("resultSetMetaData") or {}).get("rowType") or []
     width = max((len(row) for row in data), default=len(row_type))
     names = [col.get("name") for col in row_type] if row_type else []
@@ -113,4 +126,4 @@ def _cast(value, sf_type: str):
 
 def _empty(raw, status: str) -> dict:
     return {"answer": "", "sql": None, "metric_used": [], "verified_query_used": None,
-            "tools_used": [], "tables": [], "warnings": [], "status": status, "raw": raw}
+            "tools_used": [], "tables": [], "row_counts": [], "warnings": [], "status": status, "raw": raw}

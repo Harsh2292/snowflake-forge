@@ -9,7 +9,18 @@
 > CoCo implements the Snowflake side to match this exactly.
 > Claude Code implements the app side to match this exactly.
 >
-> **Version**: 1.4 · **Frozen**: 2026-09-27
+> **Version**: 1.5 · **Frozen**: 2026-09-29 (v1.4: 2026-09-27)
+>
+> **v1.5 change** (accepted by the user 2026-09-29):
+> - **CR-006**: realistic data v2. It adds the new §3 definition strings with edge-case rules
+>   and a **§3a time rule** (trailing 12 months; DOI uses the latest snapshot), applied in §5
+>   and §8. It also:
+>   - updates the §1 FQNs: MCP removed; `SP_DATA_HEALTH`, name search, view generator,
+>     `CONFORMED`, `OPS` and the `SEMANTIC_ROLE` tag added
+>   - puts the §7 views on `CONFORMED` (names and columns unchanged)
+>   - moves to 10 source tables and adds `orders.order_year_quarter`
+>
+>   The §10 values get re-captured at B09. Detail: `docs/DATA_SPEC.md`.
 >
 > **v1.4 change**:
 > - **CR-005**: `fill_rate` counts only order lines on shipped or delivered orders; open
@@ -37,7 +48,6 @@
 | Database | `SUPPLY_CHAIN_FORGE` |
 | Semantic view | `SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV` |
 | Cortex Agent | `SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_AGENT` |
-| MCP server | `SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_MCP` |
 | Streamlit app | `SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO` |
 | Warehouse | `FORGE_WH` |
 | Persona proc — Planner | `SUPPLY_CHAIN_FORGE.GOVERNED.SP_SAMPLE_AS_PLANNER()` |
@@ -46,6 +56,14 @@
 | Persona metric proc — Planner | `SUPPLY_CHAIN_FORGE.GOVERNED.SP_METRICS_AS_PLANNER()` |
 | Persona metric proc — Buyer | `SUPPLY_CHAIN_FORGE.GOVERNED.SP_METRICS_AS_BUYER()` |
 | Persona metric proc — Logistics | `SUPPLY_CHAIN_FORGE.GOVERNED.SP_METRICS_AS_LOGISTICS()` |
+| Data-health procedure (agent tool; CR-006) | `SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH(ENTITY VARCHAR) RETURNS VARIANT` (shape: DATA_SPEC §7.2) |
+| Name search service (CR-006) | `SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_NAME_SEARCH` (supplier, part, plant and carrier names only; no masked column) |
+| View generator (CR-006) | `SUPPLY_CHAIN_FORGE.SEMANTIC.SP_BUILD_SEMANTIC_VIEW(APPLY BOOLEAN)` + its registry tables in `SEMANTIC` |
+| Cleansing layer (CR-006) | schema `SUPPLY_CHAIN_FORGE.CONFORMED` (dynamic tables; not readable by persona roles) |
+| Operations (CR-006) | schema `SUPPLY_CHAIN_FORGE.OPS` (generator, evaluation set and results, scale results; `FORGE_ADMIN` only) |
+| Column-role tag (CR-006) | `SUPPLY_CHAIN_FORGE.GOVERNED.SEMANTIC_ROLE` (`KEY` / `DIMENSION` / `FACT` / `EXCLUDE`) |
+
+The MCP server was removed in v1.5 (ADR-008).
 
 ---
 
@@ -87,7 +105,9 @@ METRICS = {
         "label": "On-Time Delivery",
         "format": "percent",
         "definition": "Share of delivered shipments arriving on or before the TMS "
-                      "promised delivery date. Excludes in-transit shipments.",
+                      "promised delivery date. Excludes in-transit shipments and "
+                      "shipments with no promised date. Without a stated period, "
+                      "covers shipments shipped in the last 12 months.",
     },
     "fill_rate": {
         "id": "order_lines.fill_rate",
@@ -95,24 +115,45 @@ METRICS = {
         "format": "percent",
         "definition": "Quantity shipped divided by quantity ordered across order "
                       "lines on shipped or delivered orders. Open and cancelled "
-                      "orders are excluded. Partial shipments are pro-rated.",
+                      "orders are excluded. Partial shipments are pro-rated; "
+                      "over-shipments count as fully shipped. Without a stated "
+                      "period, covers orders placed in the last 12 months.",
     },
     "days_of_inventory": {
         "id": "inventory.days_of_inventory",
         "label": "Days of Inventory",
         "format": "number",
         "definition": "Average on-hand quantity divided by average daily usage. "
-                      "Uses gross on-hand, not net of reservations.",
+                      "Uses gross on-hand, not net of reservations; negative "
+                      "on-hand counts as zero. Without a stated period, uses the "
+                      "latest inventory snapshot.",
     },
     "avg_landed_cost": {
         "id": "shipments.avg_landed_cost",
         "label": "Avg Landed Cost",
         "format": "currency",
-        "definition": "Average total cost to move a shipment to destination: "
-                      "freight plus duties plus handling.",
+        "definition": "Average total cost to move a shipment to destination, in "
+                      "USD: freight plus duties plus handling. Missing duty or "
+                      "handling counts as zero; shipments with unknown or "
+                      "implausible cost are excluded. Without a stated period, "
+                      "covers shipments shipped in the last 12 months.",
     },
 }
 ```
+
+---
+
+## 3a. Time Rule (CR-006)
+
+One rule for the app, the procedures and the agent.
+
+| Rule | Definition |
+|---|---|
+| Anchor | `CURRENT_DATE()` at query time |
+| Default window (no period named) | trailing 12 months: `date > DATEADD(month, -12, CURRENT_DATE()) AND date <= CURRENT_DATE()`, on `shipments.ship_date` for OTD and landed cost, on `orders.order_date` for fill rate |
+| DOI | the latest snapshot: `inventory.snapshot_date = (SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)`; with a period named, the average over the snapshots in it |
+| As-of date (shown next to every metric) | the latest shipment `ship_date` loaded, from `SP_DATA_HEALTH` (`as_of_date`) |
+| Explicit period | replaces the default; the answer states the period |
 
 ---
 
@@ -126,7 +167,7 @@ Exact identifiers usable in the `DIMENSIONS` clause.
 | parts | `parts.part_name`, `parts.category`, `parts.subcategory`, `parts.is_critical` |
 | plants | `plants.plant_name`, `plants.plant_region`, `plants.plant_country`, `plants.plant_type` |
 | customers | `customers.customer_segment`, `customers.customer_region` |
-| orders | `orders.order_date`, `orders.order_month`, `orders.order_quarter`, `orders.order_year`, `orders.order_status`, `orders.order_priority` |
+| orders | `orders.order_date`, `orders.order_month`, `orders.order_quarter`, `orders.order_year`, `orders.order_year_quarter` (e.g. `2026-Q3`; added at B09, CR-006), `orders.order_status`, `orders.order_priority` |
 | shipments | `shipments.ship_date`, `shipments.carrier`, `shipments.shipment_status` |
 | inventory | `inventory.snapshot_date` |
 
@@ -163,15 +204,30 @@ These pairings are guaranteed to work:
 
 ## 5. Query Patterns
 
+Every metric query applies the §3a time rule (CR-006). Output column names are unchanged.
+
 ### 5.1 Metric only
 
 ```sql
 SELECT * FROM SEMANTIC_VIEW(
   SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
   METRICS shipments.on_time_delivery_rate
+  WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE())
+    AND shipments.ship_date <= CURRENT_DATE()
 );
 ```
 Returns: one row, one column `ON_TIME_DELIVERY_RATE`.
+
+The `WHERE` depends on the metric:
+
+| Metric | Default `WHERE` |
+|---|---|
+| `on_time_delivery_rate`, `avg_landed_cost` | the window on `shipments.ship_date` (as above) |
+| `fill_rate` | `orders.order_date > DATEADD(month, -12, CURRENT_DATE()) AND orders.order_date <= CURRENT_DATE()` |
+| `days_of_inventory` | `inventory.snapshot_date = (SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)` |
+
+Metrics with different default windows go in separate `SEMANTIC_VIEW` calls. One `WHERE`
+can't apply both a ship-date window and an order-date window.
 
 ### 5.2 Metric by dimension
 
@@ -180,6 +236,8 @@ SELECT * FROM SEMANTIC_VIEW(
   SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
   DIMENSIONS plants.plant_region
   METRICS shipments.on_time_delivery_rate
+  WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE())
+    AND shipments.ship_date <= CURRENT_DATE()
 ) ORDER BY plant_region;
 ```
 Returns: one row per region. Columns `PLANT_REGION`, `ON_TIME_DELIVERY_RATE`.
@@ -236,7 +294,8 @@ so real masking policies and role contexts apply. The app calls all six as the a
 | `CONTRACT_PRICE` | NUMBER | from `V_SOURCING` for `SAMPLE_PART_ID`; `NULL` when masked |
 | `CUSTOMER_EMAIL` | VARCHAR | from `V_CUSTOMER.email` for `SAMPLE_CUSTOMER_ID`; `*** MASKED ***` when masked |
 
-**Metric procedures (CR-002)** return a single row with this shape:
+**Metric procedures (CR-002)** return a single row with this shape. From v1.5 each metric
+is computed under the §3a time rule (CR-006); the shape and columns are unchanged.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -317,6 +376,13 @@ The masking policies themselves are unchanged — real, role-based, production-g
 
 Claude Code may query these directly for the divergence proof.
 
+From v1.5 (CR-006) the view names, columns and column order are **unchanged**, but the views
+read the `CONFORMED` layer instead of the source schemas:
+- rows are unique and in scope (no test records, returns or orphans)
+- values are standardized to the §4 values
+- every amount is in USD
+- `V_SOURCING` shows only the sourcing rows valid today
+
 | View | Columns |
 |------|---------|
 | `GOVERNED.V_SUPPLIER` | `supplier_id`, `supplier_name`, `country`, `region`, `supplier_tier`, `lead_time_days`, `reliability_score`, `payment_terms`, `email` |
@@ -340,7 +406,8 @@ different numbers, which is the demo's opening hook.
 ```sql
 SELECT COUNT_IF(s.ACT_DLV_DT <= o.ERDAT) / NULLIFZERO(COUNT_IF(s.ACT_DLV_DT IS NOT NULL))
 FROM SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK s
-JOIN SUPPLY_CHAIN_FORGE.ERP_SOURCE.VBAK o ON s.VBELN = o.VBELN;
+JOIN SUPPLY_CHAIN_FORGE.ERP_SOURCE.VBAK o ON s.VBELN = o.VBELN
+WHERE s.DPTBG > DATEADD(month, -12, CURRENT_DATE()) AND s.DPTBG <= CURRENT_DATE();
 ```
 
 **Governed — semantic view metric (authoritative):**
@@ -348,8 +415,16 @@ JOIN SUPPLY_CHAIN_FORGE.ERP_SOURCE.VBAK o ON s.VBELN = o.VBELN;
 SELECT * FROM SEMANTIC_VIEW(
   SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
   METRICS shipments.on_time_delivery_rate
+  WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE())
+    AND shipments.ship_date <= CURRENT_DATE()
 );
 ```
+
+Both queries use the same 12-month window (§3a), so they cover the same shipments. The naive
+query still reads raw source data with the ERP date, which is the point of the demo.
+Expected: naive ~0.68–0.74, governed ~0.87, at least 8 points apart (DATA_SPEC §5.4).
+Source tables: 10 from v1.5 (`ERP_SOURCE.TCURR` added; columns per DATA_SPEC §1). Only this
+naive query reads them.
 
 These are the **only** circumstances under which Claude Code may query source schemas
 directly. Everywhere else, go through the semantic view or governed views.
@@ -382,7 +457,9 @@ Until CoCo signals readiness in `.agents/HANDOFF.md`, Claude Code builds against
 USE_MOCK_DATA = True   # flip to False when HANDOFF.md shows all items DONE
 ```
 
-Mock values must sit inside the ranges in §3 so the UI looks correct while offline:
+Mock values must sit inside the ranges in §3 so the UI looks correct while offline.
+Under CR-006 the practice values below are replaced by the values in the re-captured art 05
+(B09), within v1.5:
 
 ```python
 MOCK_METRICS = {
@@ -568,7 +645,128 @@ as written.
 
 ---
 
-_Open change requests: none (all resolved)._
+### CR-006 — Realistic data v2: edge-case metric rules, one time rule, new objects, MCP removed
+**Requested by**: CoCo (B08b, 2026-09-29)
+**Status**: **ACCEPTED** by the user, 2026-09-29. Applied in the body as **v1.5**: header,
+§1, §3, §3a, §4, §5, §7, §8, §10. The §10 practice values are filled in at B09 within v1.5,
+as agreed with Claude Code (HANDOFF Q2).
+**Detail**: `docs/DATA_SPEC.md` (the mess catalogue §4, the rules §5, the interfaces §7).
+
+**Reason**: ADR-008 replaces the small clean v1 data with 10 years of realistic, messy data
+(duplicates, code variants, currencies, test records, edge cases), cleaned once in a new
+`CONFORMED` layer. With 10 years of data, "What is our OTD?" needs one defined period, or
+the app and the agent can return two different numbers for the same question. The edge
+cases also need exact metric rules. The MCP server was dropped (ADR-008).
+
+**Proposed change**:
+
+1. **§3 definitions** (identifiers, labels, formats and **ranges unchanged**). The new
+   `definition` strings, verbatim:
+   - `on_time_delivery_rate`: *"Share of delivered shipments arriving on or before the TMS
+     promised delivery date. Excludes in-transit shipments and shipments with no promised
+     date. Without a stated period, covers shipments shipped in the last 12 months."*
+   - `fill_rate`: *"Quantity shipped divided by quantity ordered across order lines on
+     shipped or delivered orders. Open and cancelled orders are excluded. Partial shipments
+     are pro-rated; over-shipments count as fully shipped. Without a stated period, covers
+     orders placed in the last 12 months."*
+   - `days_of_inventory`: *"Average on-hand quantity divided by average daily usage. Uses
+     gross on-hand, not net of reservations; negative on-hand counts as zero. Without a
+     stated period, uses the latest inventory snapshot."*
+   - `avg_landed_cost`: *"Average total cost to move a shipment to destination, in USD:
+     freight plus duties plus handling. Missing duty or handling counts as zero; shipments
+     with unknown or implausible cost are excluded. Without a stated period, covers
+     shipments shipped in the last 12 months."*
+
+2. **New §3a Time rule** (one rule for the app, the procedures and the agent):
+
+   | Rule | Definition |
+   |---|---|
+   | Anchor | `CURRENT_DATE()` at query time |
+   | Default window (no period named) | trailing 12 months: `date > DATEADD(month, -12, CURRENT_DATE()) AND date <= CURRENT_DATE()`, on `shipments.ship_date` for OTD and landed cost, on `orders.order_date` for fill rate |
+   | DOI | the latest snapshot: `inventory.snapshot_date = (SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)`; with a period named, the average over the snapshots in it |
+   | As-of date (shown next to every metric) | the latest shipment `ship_date` loaded, from `SP_DATA_HEALTH` (`as_of_date`) |
+   | Explicit period | replaces the default; the answer states the period |
+
+3. **§5.1 / §5.2 patterns** gain the §3a `WHERE` clause (verified live on the v1 view). The
+   output column names are unchanged. Example:
+
+   ```sql
+   SELECT * FROM SEMANTIC_VIEW(
+     SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+     DIMENSIONS plants.plant_region
+     METRICS shipments.on_time_delivery_rate
+     WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE())
+       AND shipments.ship_date <= CURRENT_DATE()
+   ) ORDER BY plant_region;
+   ```
+
+   `SP_METRICS_AS_*` (§5.4) return the 4 metrics **under §3a** (same shape, same columns).
+
+4. **§1 FQNs**:
+   - remove the MCP server row
+   - add:
+
+   | Object | FQN |
+   |---|---|
+   | Data-health procedure (agent tool) | `SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH(ENTITY VARCHAR) RETURNS VARIANT` (shape: DATA_SPEC §7.2) |
+   | Name search service | `SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_NAME_SEARCH` (supplier, part, plant and carrier names only; no masked column) |
+   | View generator | `SUPPLY_CHAIN_FORGE.SEMANTIC.SP_BUILD_SEMANTIC_VIEW(APPLY BOOLEAN)` + its registry tables in `SEMANTIC` |
+   | Cleansing layer | schema `SUPPLY_CHAIN_FORGE.CONFORMED` (dynamic tables; not readable by persona roles) |
+   | Operations | schema `SUPPLY_CHAIN_FORGE.OPS` (generator, evaluation set and results, scale results; `FORGE_ADMIN` only) |
+   | Column-role tag | `SUPPLY_CHAIN_FORGE.GOVERNED.SEMANTIC_ROLE` (`KEY` / `DIMENSION` / `FACT` / `EXCLUDE`) |
+
+5. **§7**: view names, columns and order are **unchanged**. Behind them:
+   - the views read `CONFORMED` instead of the source schemas
+   - rows are unique, in scope (no test records, returns, orphans) and standardized to
+     the §4 values
+   - every amount is in USD
+   - `V_SOURCING` shows only the sourcing rows valid today.
+
+6. **§8**: the naive query gets the same window, so both numbers cover the same shipments.
+   It still reads raw `SOURCE` with the ERP date, which is the point of the demo:
+
+   ```sql
+   SELECT COUNT_IF(s.ACT_DLV_DT <= o.ERDAT) / NULLIFZERO(COUNT_IF(s.ACT_DLV_DT IS NOT NULL))
+   FROM SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK s
+   JOIN SUPPLY_CHAIN_FORGE.ERP_SOURCE.VBAK o ON s.VBELN = o.VBELN
+   WHERE s.DPTBG > DATEADD(month, -12, CURRENT_DATE()) AND s.DPTBG <= CURRENT_DATE();
+   ```
+
+   Expected: naive ~0.68–0.74, governed ~0.87 (at least 8 points apart; DATA_SPEC §5.4).
+
+7. **Source tables: 9 → 10** (`ERP_SOURCE.TCURR`, FX rates). The source columns change as
+   DATA_SPEC §1 describes; only §8 reads them.
+
+8. **Additive, no contract change needed**: B09's extra semantic-view content (IDs,
+   descriptive columns, facts, about 10 more named metrics, named filters, instructions,
+   verified queries). The §3 and §4 identifiers stay exactly as they are. B09 also adds
+   `orders.order_year_quarter` (e.g. `2026-Q3`), because `order_quarter` (`Q1`–`Q4`) mixes
+   the same quarter of different years in a 12-month window. §4's values are unchanged.
+
+9. **§10**: the practice values are replaced by the values in the re-captured art 05 (B09).
+
+**Impact on CoCo**:
+- B08c: `CONFORMED`, `OPS`, source DDL v2, re-point the views
+- B09: the four §3 formulas get the E01/E04/E05/E07/E08 rules via `CONFORMED`; OTD's
+  denominator also needs a promised date; `SP_METRICS_AS_*` apply §3a;
+  `AI_SQL_GENERATION` states §3a
+- B10: the agent states the period in every answer
+- B14: audits §3a
+
+**Impact on Claude Code**:
+- `app/utils/config.py`: the four §3 definition strings change (verbatim above); remove
+  `MCP_SERVER`
+- `forge_data.py`:
+  - every metric query adds the §3a `WHERE`
+  - `get_naive_otd()` adds the window
+  - the as-of date comes from `SP_DATA_HEALTH('shipments')` (C09 part B)
+- the Data health screen judges DMF results by layer: zero is expected only in `CONFORMED`
+  (DATA_SPEC §7.2)
+- C11's ground truth and C13's live tests apply §3a.
+
+---
+
+_Open change requests: none. CR-006 accepted 2026-09-29 (v1.5)._
 
 <!--
 To propose a change, append:

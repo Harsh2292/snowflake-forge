@@ -1,236 +1,250 @@
 # Claude Code Task Queue
 
-> **Progress (2026-09-24):** C1 ✅ · C2 ✅ · C3 ✅ · next: C4. Live status is in
-> `.agents/NEXT.md`, and each track's detail (including what changed from the spec below)
-> is in its card under `.agents/tasks/claude/`. C3 was built as a guided four-step story
-> plus Explore and Data health screens, replacing the five tabs described below
-> (user-approved design).
+> **Replanned 2026-09-29 (user-approved)** by CoCo, with the user's permission to edit this
+> file once. Claude Code owns it from here on.
 >
-> Owner: Claude Code (application layer + references + docs)
-> **You are NOT blocked.** Start at C1 immediately.
+> **Progress:** C01 ✅ · C02 ✅ · C03 ✅ · C04 ✅ · C07 ✅ · C6a ✅. Remaining, in order:
+> **C09 → C08 → C10 → C11 → C6b → C12 → C6c → C13 → C05 → C14 (stretch)**. Live status is
+> in `.agents/NEXT.md`; each track's detail goes in its card under `.agents/tasks/claude/`
+> (write the card at planning time, before building, as always).
 >
-> Read `docs/CONTRACT.md` first — it is frozen and it is your spec. Build against it,
-> not against live Snowflake objects. A mock layer lets you finish the entire app before
-> CoCo's Snowflake work lands.
+> **Goal of the replan:** finish in 3 days, production-ready and deployed. The core system
+> (question → agent → semantic view → SQL → governed data → answer) must stay correct, fast
+> and cheap from today's data to billions of rows, and while data changes.
+>
+> **What changed for you:** you now write **everything that can be written offline,
+> including Snowflake SQL**: the realistic data generator, the data-quality SQL, the agent's
+> data-health tool, the evaluation set, the scale harness. CoCo runs it and returns the
+> results. You still have **no Snowflake access** and never need any.
+>
+> Read `docs/CONTRACT.md` (your spec), `docs/DATA_SPEC.md` (the spec for all your SQL,
+> written by CoCo at B08b), and `docs/references/snowflake_execution_notes.md` (how CoCo
+> runs your files) before starting any SQL track.
 
 ---
 
 ## Ownership
 
-| You own | You must NOT touch |
+| You own | CoCo owns (read only for you) |
 |---------|-------------------|
-| `app/**` | `sql/**` |
-| `tests/**` | `semantic/**` |
-| `demo/**` | `agent/**` |
-| `docs/references/**` | `docs/HLD.md`, `docs/LLD.md`, `docs/CONTRACT.md` |
-| `README.md` | `.agents/tasks/COCO_TASKS.md` |
+| `app/**`, `tests/**` (incl. `tests/scale/`), `demo/**`, `deploy/**`, `.github/**` | `sql/**`, `semantic/**`, `agent/**` |
+| `docs/references/**`, `README.md` | `docs/artifacts/**` (incl. `runs/`) |
+| **`data_gen/**`** (C08), **`quality/**`** (C10), **`eval/**`** (C11) | `docs/CONTRACT.md` (you may only append a Change Request in §11), `docs/DATA_SPEC.md`, `docs/HLD.md`, `docs/LLD.md`, `docs/ROADMAP.md`, `docs/MILESTONES.md` |
+| `.agents/tasks/CLAUDE_TASKS.md`, `.agents/tasks/claude/**`, `CLAUDE.md` | `.agents/tasks/COCO_TASKS.md`, `.agents/tasks/coco/**`, `COCO.md` |
 
-**You may never execute DDL or DML against Snowflake.** CoCo owns every Snowflake
-object. If you need one, file a request in `.agents/HANDOFF.md` under `## Blocked`.
+Shared, **your section only**: `.agents/NEXT.md`, `.agents/HANDOFF.md`,
+`docs/SESSION_LOG.md` (your own entries), `.agents/DECISIONS.md`.
 
----
-
-## Track C1 — API Reference Library  ⬅ START HERE
-
-Build a local reference folder so you are not guessing at APIs later. Fetch the real
-docs; do not write these from memory.
-
-- [ ] Create `docs/references/`
-- [ ] `streamlit_in_snowflake.md` — SiS specifics: `get_active_session()`, supported
-      widgets, what differs from local Streamlit, deployment via `CREATE STREAMLIT`
-      <https://docs.snowflake.com/en/developer-guide/streamlit/about-streamlit>
-- [ ] `snowpark_session.md` — `Session.sql()`, `.collect()`, `.to_pandas()`, parameter
-      binding, error handling
-      <https://docs.snowflake.com/en/developer-guide/snowpark/reference/python/latest/index>
-- [ ] `semantic_view_query.md` — the `SEMANTIC_VIEW()` construct: clause order, output
-      column naming, `METRICS` vs `FACTS` vs `DIMENSIONS` rules, granularity constraints
-      <https://docs.snowflake.com/en/sql-reference/constructs/semantic_view>
-- [ ] `data_agent_run.md` — `SNOWFLAKE.CORTEX.DATA_AGENT_RUN()` signature, request JSON
-      shape, **response JSON shape** (you must parse this — capture the event/content
-      structure precisely)
-      <https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-run>
-- [ ] `mcp_client_setup.md` — how to connect an MCP client to a Snowflake-managed MCP
-      server: OAuth vs PAT, hostname rules (**hyphens not underscores**), tool discovery
-      <https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-mcp>
-- [ ] `plotly_streamlit.md` — chart patterns you will actually use
-
-**Gate**: each file contains real fetched content with a source URL and a date, not
-paraphrase from memory. The `DATA_AGENT_RUN` response shape is the critical one — the
-app cannot render answers without it.
+**You may never execute anything against Snowflake.** You write the SQL; CoCo runs it.
 
 ---
 
-## Track C2 — Data Access Layer (mock-backed)
+## How your Snowflake SQL gets run (the handoff lock)
 
-One module is the only thing that ever touches Snowflake. Every UI component calls it.
-Flipping one flag switches mock → live and the UI code never changes.
-
-- [ ] `app/utils/config.py`
-  - `USE_MOCK_DATA = True`
-  - All FQNs, `PERSONA_ROLES`, `METRICS`, `MOCK_METRICS`, `MOCK_BY_REGION` copied
-    verbatim from `docs/CONTRACT.md`
-- [ ] `app/utils/forge_data.py` — every function has a mock branch and a live branch:
-  - [ ] `get_session()`
-  - [ ] `get_metric(metric_key, dimension=None, role=None) -> DataFrame`
-  - [ ] `get_all_metrics(role=None) -> DataFrame`
-  - [ ] `compare_across_personas(metric_key) -> DataFrame`
-  - [ ] `get_masking_divergence(role) -> DataFrame`
-  - [ ] `ask_agent(question, role=None) -> dict` → `{answer, sql, metric_used, raw}`
-  - [ ] `get_naive_otd() -> float` (ERP-promised-date version, for Tab 3)
-  - [ ] `get_governed_otd() -> float`
-  - [ ] `get_source_schema_summary() -> DataFrame` (the four messy schemas)
-  - [ ] `get_quality_results() -> DataFrame`
-- [ ] Live branches build SQL strictly from `docs/CONTRACT.md` §5 patterns
-- [ ] Every live branch wrapped so a failure degrades to mock with a visible warning,
-      never a stack trace on stage
-
-**Gate**: `get_all_metrics()` returns contract-shaped data in mock mode, and every
-live-branch SQL string is present and syntactically correct even though unexercised.
+1. **Write** the file in your folder, following `docs/DATA_SPEC.md` and
+   `docs/references/snowflake_execution_notes.md`:
+   - a header comment naming the card, the role and warehouse to run as, the parameters
+     and the expected results
+   - fully qualified names everywhere; idempotent (re-running gives the same result)
+   - statements end with `;`; Snowflake Scripting blocks are fine
+   - no `USE ROLE` outside a block: it doesn't carry over between statements in CoCo's tool
+2. **Hand it over**: add a row to the **"Ready for CoCo to run"** table in
+   `.agents/HANDOFF.md`: the file, the card, the order to run it in, and the expected results
+   (row counts, rates, return shapes). From then on, **don't edit it**.
+3. **CoCo runs it** and writes `docs/artifacts/runs/<card>_run.md`: each statement's
+   outcome, verbatim errors, row counts, timings. CoCo may make **only run-blocking fixes of
+   a few lines**, shown as a diff in that report.
+4. **CoCo marks the row DONE or RETURNED.** The file is yours again: adopt any fix from the
+   report, or fix what was returned and hand it over again.
 
 ---
 
-## Track C3 — Streamlit App
+## Remaining tracks, in order
 
-Build the full UI against `forge_data.py`. It must be fully demoable in mock mode.
+### C09 — App production pass  ⬅ START NOW (Day 1–2)
 
-- [ ] `app/streamlit_app.py` — sidebar persona selector + 5 tabs
+The app has to survive realistic data and run live.
+- [ ] `NULL` metric values render as "—" with a tooltip, never as `nan` or an error (fill
+      rate for OPEN/CANCELLED orders is `NULL` by design, CR-005)
+- [ ] Long results are limited or paged: dimensions like `orders.order_date` grow to about
+      3,650 rows over 10 years. Charts show a sensible default window or grain.
+- [ ] Show the **as-of date** of the data on every metric screen (the time rule comes in
+      CR-006 at B08b)
+- [ ] Remove `MCP_SERVER` from `app/utils/config.py` (MCP is dropped; CR-006 removes it
+      from §1) and anything that refers to it
+- [ ] Prepare `USE_MOCK_DATA = False`: every live branch works through the contract
+      patterns, and mock fallback stays visible
+- [ ] The Data health screen can show `SEMANTIC.SP_DATA_HEALTH` output (the shape is in
+      `docs/DATA_SPEC.md` §Interfaces) next to the DMF results
+- [ ] Keep `app/environment.yml` in step with `app/requirements.txt`
+- **Gate**: `pytest -q` and `pytest -m ui` green; screenshots show `NULL` handling and the
+  as-of date
 
-- [ ] **Tab 1 · Ask**
-  - [ ] Free-text input plus 8 suggested-question chips from `CONTRACT.md` §9
-  - [ ] Call `ask_agent()`, render the answer prominently
-  - [ ] Expanders: generated SQL, metric definition applied, raw agent response
-  - [ ] Caption naming the semantic view FQN that grounded the answer
+### C08 — Realistic data generator  ⬅ CRITICAL PATH (Day 1, READY by end of day)
 
-- [ ] **Tab 2 · Consistency Proof**  ← the core claim, make it unmistakable
-  - [ ] 4 metrics × 3 personas grid
-  - [ ] Green check when all three match to 6 dp, red when not
-  - [ ] Second table showing *expected divergence* — which columns each persona sees masked
-  - [ ] One-line explanation: same metric definition, different data visibility
+**Input:** `docs/DATA_SPEC.md` (B08b), `docs/references/snowflake_data_generation.md`,
+`docs/references/snowflake_execution_notes.md`, LLD §2 (today's source columns).
 
-- [ ] **Tab 3 · The Problem**
-  - [ ] Four source schemas with their cryptic column names side by side
-  - [ ] Highlight `ERP.VBAK.ERDAT` vs `TMS.VTTK.PROM_DLV_DT` — both claim "promised date"
-  - [ ] Naive OTD vs governed OTD, two different numbers, then the resolution
-  - [ ] This tab earns the Real World Relevance score
+- [ ] Seeded SQL scripts in `data_gen/` that fill the source tables (`ERP_SOURCE`,
+      `WMS_SOURCE`, `TMS_SOURCE`, `SRM_SOURCE`) with **10 years of realistic data ending
+      today**, as the spec describes:
+  - `data_gen/00_params.sql`: `SCALE_FACTOR`, the seed, the end date (session variables)
+  - one script per stage, in the spec's FK load order (masters → orders and lines →
+    shipments → inventory → FX rates)
+  - a **separate mess-injection script**, so clean vs messy is easy to check
+  - `data_gen/90_self_checks.sql`: row counts per table, each injected defect's actual
+    rate against its target, and the ERP/TMS date-conflict rate
+- [ ] **Deterministic**: the same seed and scale factor give the same data, every run
+- [ ] **Scales linearly**: `SCALE_FACTOR` multiplies transactional volumes, not master
+      data counts, beyond what the spec says. It must run at 100M+ order lines on a larger
+      warehouse (B13).
+- [ ] **Realistic**: seasonality, growth, carrier and supplier churn, regional mix, as the
+      spec describes. After CoCo's cleansing, the 4 canonical metrics must land inside the
+      §3 ranges.
+- [ ] Hand over under the lock; CoCo runs it at B08c
+- **Gate** (checked in CoCo's run report): every script runs; the self-checks match the
+  spec's volumes and defect rates within the stated tolerance; a second run gives the same
+  counts and checksums
 
-- [ ] **Tab 4 · Metrics**
-  - [ ] OTD by region, fill rate by category, DOI by plant, landed cost by region
-  - [ ] Plotly charts, all sourced through `forge_data.get_metric()`
-  - [ ] Respect the valid metric × dimension pairings in `CONTRACT.md` §4
+### C10 — Data-quality SQL + the agent's data-health tool (Day 1–2)
 
-- [ ] **Tab 5 · Data Quality**
-  - [ ] Render `get_quality_results()`; show a neutral placeholder if DMFs aren't live yet
+**Input:** `docs/DATA_SPEC.md` (mess catalogue, §Interfaces),
+`docs/references/data_metric_functions.md`, `docs/references/snowflake_scripting_procedures.md`,
+`docs/references/agent_custom_tools.md`.
 
-- [ ] Mock-mode banner so nobody mistakes mock numbers for real ones
+- [ ] `quality/01_custom_dmfs.sql`: custom DMFs, including `DMF_OVERSHIP_COUNT` (the name
+      the app expects), orphan lines, missing promised dates, negative on-hand, cost outliers
+- [ ] `quality/02_attach_dmfs.sql`: system DMFs (nulls, duplicates, freshness, row count)
+      plus the custom ones, attached to the right `SOURCE` and `CONFORMED` tables on a
+      schedule, as the spec lists
+- [ ] `quality/03_sp_data_health.sql`: `SEMANTIC.SP_DATA_HEALTH(entity VARCHAR)`, exactly the
+      signature and return shape in the spec. The agent calls it as a custom tool, and the
+      app can show it.
+- [ ] Hand over under the lock; CoCo runs it at B12 and attaches the tool at B10
+- **Gate** (CoCo's run report): the DMFs attach; results appear; `SOURCE` shows the
+  injected defects and `CONFORMED` doesn't; `SP_DATA_HEALTH` returns the spec shape for
+  every entity
 
-**Gate**: app runs locally end to end in mock mode, all 5 tabs render, persona selector
-changes the divergence table.
+### C11 — Evaluation set + runner (Day 1–2)
+
+**Input:** `docs/DATA_SPEC.md` §Interfaces (the file format), `docs/references/agent_evaluations.md`,
+`docs/references/data_agent_run.md`, contract §3, §4, §9.
+
+- [ ] `eval/questions.*` (format per the spec), about 25–30 questions, each with a category,
+      the expected behaviour (answer / refuse / clarify), a **ground-truth `SEMANTIC_VIEW`
+      query** (not a hard-coded number, so it stays right when the data changes) and a
+      tolerance. Cover:
+  - the 8 §9 canonical questions
+  - record lookups, counts and totals, supplier performance, inventory health, cost
+    breakdown, cross-system, revenue
+  - numbered multi-part questions
+  - out-of-scope (must refuse), ambiguous (must clarify), and Hindi (GAP-5)
+- [ ] `eval/run_eval.sql`: runs every question through `DATA_AGENT_RUN`, runs its ground
+      truth, and returns one row per question (answer, generated SQL, pass/fail, latency)
+- [ ] Optionally, `eval/agent_eval_config.*` for Snowflake's agent evaluations
+      (`EXECUTE_AI_EVALUATION`), if the reference shows it fits
+- [ ] Hand over under the lock; CoCo runs it at B10 → art 08
+- **Gate**: CoCo runs it end to end and art 08 records a pass rate
+
+### C6b — Reconcile the semantic layer (Day 2)
+
+Unchanged in purpose, but **wait for the re-captured art 05/06** (B09, on the new data).
+- [ ] Replace `MOCK_METRICS` and `MOCK_BY_REGION` with the real captured values
+- [ ] Confirm output column naming matches your live branches
+- [ ] Use `05_metric_values.json` as the fixture for `tests/semantic/`; rows inside each
+      pairing aren't sorted, so sort by the dimension first
+- **Gate**: `pytest -q` green on the new fixtures; zero unexplained mismatches
+
+### C12 — Scale-test harness (Day 2)
+
+**Input:** `docs/DATA_SPEC.md` §Interfaces (harness inputs and outputs), contract §3–§5.
+
+- [ ] `tests/scale/scale_queries.sql`: the 4 metrics, the 55 valid pairings, the
+      `SP_METRICS_AS_*` calls, and a few evaluation questions, parameterised by the database
+      name (CoCo runs it on a zero-copy clone)
+- [ ] Timing and pruning capture (elapsed time, partitions scanned vs total) from query
+      history for those queries
+- [ ] `tests/scale/report_template.md`: what art 12 should contain
+- [ ] Hand over under the lock; CoCo runs it at B13 → art 12
+- **Gate**: CoCo runs it on the clone and art 12 is filled
+
+### C6c — Agent parser + proof grid (Day 2)
+
+- [ ] Write the `ask_agent()` response parser against `07_agent_response.json`: answer
+      text, generated SQL, tool used, citations, and the data-health tool output when present
+- [ ] Correct `docs/references/data_agent_run.md` if the real JSON differs (the artifact is
+      ground truth)
+- [ ] Use `09_consistency_proof.json` (now from B09) for the proof grid
+- [ ] Use `08_agent_answers.md` (the whole evaluation set) for Ask-screen tests
+- [ ] Flip `USE_MOCK_DATA = False` for the deployed app (CoCo deploys at B15)
+- **Gate**: parsers written against real data; `pytest -q` green with artifacts as fixtures
+
+### C13 — Live-test refresh for the audit (Day 2–3)
+
+CoCo runs `pytest -m live` at B14 as the contract audit.
+- [ ] Update the live tests for the new data and CR-006: new §3 texts, value ranges, the
+      new objects (`SP_DATA_HEALTH` shape; the extra semantic-view content being additive)
+- [ ] Make sure it runs with only `SNOWFLAKE_CONNECTION_NAME` set and Snowpark installed;
+      document the exact command in `tests/README` or the card
+- [ ] Hand over under the lock
+- **Gate**: CoCo's run gives a clear pass/fail per contract section; failures name the object
+
+### C05 — Demo script, talking points, README, core-scalability doc (Day 3)
+
+The card is already written (`.agents/tasks/claude/C05_demo_readme.md`); update it for the
+replan.
+- [ ] `demo/demo_script.md`: a timed 5-minute run over the real app screens, with the
+      exact questions and the real numbers from the final artifacts
+- [ ] `demo/talking_points.md`: one crisp answer per judging criterion
+- [ ] `README.md`: architecture, how it runs, the four-source-system story, the core
+      scalability design (art 12), the evaluation pass rate (art 08)
+- [ ] The core-scalability doc (the prompt the user gave you)
+- **Gate**: a stranger can follow `demo_script.md` and reproduce the demo on the deployed app
+
+### C14 — Stretch: parallel multi-part router + KPI shortcut (Day 3, only if time is left)
+
+- [ ] In `forge_data.ask_agent()`: split numbered multi-part questions (CoCo supplies a
+      governed splitter function if built), run the independent parts at once with Snowpark
+      async (`docs/references/snowpark_async.md`), and merge the answers in the order asked
+- [ ] KPI sub-questions go straight to `SEMANTIC_VIEW`, with no LLM
+- **Gate**: measured against a single agent call on the multi-part evaluation questions
 
 ---
 
-## Track C4 — Test Suite
+## Done tracks (history)
 
-Write the tests now. They are the executable form of the contract. They will fail until
-CoCo delivers — that is correct and expected.
+### Track C1 — API Reference Library ✅
 
-- [ ] `tests/consistency/test_cross_persona.py`
-  - [ ] `test_otd_identical_across_personas`
-  - [ ] `test_fill_rate_identical_across_personas`
-  - [ ] `test_doi_identical_across_personas`
-  - [ ] `test_landed_cost_identical_across_personas`
-  - [ ] Compare at 6 decimal places
-- [ ] `tests/governance/test_masking.py` — one test per row of `CONTRACT.md` §6
-- [ ] `tests/semantic/test_metric_ranges.py` — each metric inside `CONTRACT.md` §3 range
-- [ ] `tests/semantic/test_dimension_pairings.py` — every valid pairing returns rows;
-      `days_of_inventory` × `orders.*` fails as expected
-- [ ] `tests/conftest.py` — session fixture, role-switch fixture, skip-if-mock marker
-- [ ] `pytest.ini` — markers `live` and `mock`
+Built a local reference folder of fetched docs (`docs/references/`): SiS, Snowpark
+session, `SEMANTIC_VIEW`, `DATA_AGENT_RUN`, MCP client setup (now obsolete: MCP is
+dropped), Plotly. Each file carries its source URL and date. Findings are in
+`docs/references/README.md`.
 
-**Gate**: `pytest -m mock` green. `pytest -m live` collects without import errors and
-skips cleanly while Snowflake objects are absent.
+### Track C2 — Data Access Layer ✅
 
----
+`app/utils/config.py` (contract copied verbatim, `USE_MOCK_DATA`) and
+`app/utils/forge_data.py` (the only module that talks to Snowflake; every function has a
+mock and a live branch, and live failures degrade to mock with a visible warning).
 
-## Track C5 — Demo & Submission Docs
+### Track C3 — Streamlit App ✅
 
-- [ ] `demo/demo_script.md` — rewrite to a timed 5-minute run, tab by tab, with the
-      exact questions to type and the exact numbers to point at
-- [ ] `demo/talking_points.md` — one crisp answer per judging criterion
-- [ ] `README.md` — architecture diagram, what it does, how to run it, tech stack,
-      the four-source-system story. Written for a judge skimming for 90 seconds.
+Built as a guided four-step story plus Explore and Data health screens (user-approved
+design, replacing the five tabs of the original spec). Detail in
+`.agents/tasks/claude/C03_streamlit_app.md`.
 
-**Gate**: a stranger can follow `demo_script.md` and reproduce the demo.
+### Track C4 — Test Suite ✅
 
----
+Unit and contract tests on mock data, `[live]` variants that skip without Snowflake, and a
+browser suite (`pytest -m ui`). Detail in `.agents/tasks/claude/C04_tests.md`.
 
-## Track C6 — Artifact-Based Verification  ⬅ three staged unlocks, no credentials needed
+### Track C6a — Governed layer ✅
 
-You have **no Snowflake access** and do not need any. CoCo runs the live queries and
-commits the **real output** to `docs/artifacts/`. You verify against those files.
+Art 03/04 reconciled with 0 mismatches. **Re-check after B08c** (art 03/04 are re-captured
+on the new data; the columns and masking must not change).
 
-Read `docs/artifacts/README.md` for the full schedule. Watch `.agents/HANDOFF.md` — it
-marks each artifact as it lands.
+### Track C07 — CI + one-command deploy ✅
 
-**You never edit files in `docs/artifacts/`.** CoCo owns them.
-
-### C6a — Governed layer  (artifacts from CoCo **B7**, **B7b**)
-
-| Artifact | Verify |
-|----------|--------|
-| `03_governed_columns.json` | All 9 views' real column names match `CONTRACT.md` §7 |
-| `04_persona_outputs.json` | Real masked values match `CONTRACT.md` §6 exactly |
-
-- [ ] Compare artifact contents against the contract, field by field
-- [ ] Wire `get_masking_divergence()` to parse the real shape from `04_persona_outputs.json`
-- [ ] Use the artifact as the fixture for `tests/governance/test_masking.py`
-- [ ] Any mismatch → **Change Request** in `CONTRACT.md` §11. Never adapt silently.
-
-### C6b — Semantic layer  (artifacts from CoCo **B8**)
-
-| Artifact | Verify |
-|----------|--------|
-| `05_metric_values.json` | All 4 metric values present and inside `CONTRACT.md` §3 ranges |
-| `06_dimension_matrix.md` | Every valid metric × dimension pairing passed; `days_of_inventory` × `orders.*` failed as documented |
-
-- [ ] Replace `MOCK_METRICS` and `MOCK_BY_REGION` with the **real** captured values
-      — the demo then shows genuine numbers even in mock mode
-- [ ] Confirm output column naming (unqualified, uppercased) matches what your live
-      branches expect
-- [ ] Use `05_metric_values.json` as the fixture for `tests/semantic/`
-
-### C6c — Agent layer  (artifacts from CoCo **B10**, **B11**)
-
-| Artifact | Verify |
-|----------|--------|
-| `07_agent_response.json` | ⭐ **The critical one.** A real, complete `DATA_AGENT_RUN` response. |
-| `08_agent_answers.md` | All 8 canonical questions with actual answers and generated SQL |
-| `09_consistency_proof.json` | 4 metrics × 3 personas, real values to 6 dp |
-| `02_raw_metrics.md` | The two divergent OTD numbers for Tab 3 |
-
-- [ ] Write the `ask_agent()` response parser against `07_agent_response.json`
-      — extract answer text, generated SQL, tool used, citations
-- [ ] Compare the real JSON against what you predicted in
-      `docs/references/data_agent_run.md`. If they differ, **correct the reference file** —
-      the artifact is ground truth.
-- [ ] Use `09_consistency_proof.json` as the fixture for the Tab 2 proof grid
-- [ ] Use `02_raw_metrics.md` for the Tab 3 naive-vs-governed comparison
-
-**Gate for C6**: every artifact reconciled against the contract, all parsers written
-against real data, `pytest -m mock` green using artifacts as fixtures, zero unexplained
-mismatches.
-
-### Deployment
-
-Deploying to Streamlit in Snowflake requires Snowflake write access, which you do not have.
-CoCo deploys the app at **B15**. Your job is to make `app/streamlit_app.py` correct and
-deployable. Flag it as ready in `.agents/HANDOFF.md`.
-
-### If artifacts prove insufficient
-
-If you genuinely cannot verify something from a file — say the agent response varies in a
-way one capture does not reveal — say so explicitly in `.agents/HANDOFF.md` under
-`## Blocked`, naming exactly what you need. Options are then: CoCo captures more artifacts,
-or the user provisions a read-only PAT (CoCo's deferred B7c). Do not guess.
+`.github/workflows/tests.yml` and `deploy/deploy_app.py`. CoCo deploys with it at B15.
 
 ---
 
@@ -239,5 +253,5 @@ or the user provisions a read-only PAT (CoCo's deferred B7c). Do not guess.
 1. Update `.agents/HANDOFF.md` under `## Latest from Claude Code` when you finish a track
 2. Append to `docs/SESSION_LOG.md` when you stop work
 3. Never edit `docs/CONTRACT.md` except to append a Change Request
-4. Never run DDL/DML against Snowflake
+4. Never run anything against Snowflake; hand SQL over through the lock
 5. Do not commit or push — the user does that

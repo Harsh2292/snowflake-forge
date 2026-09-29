@@ -2,6 +2,7 @@
 const D = DATA;
 ACTIONS.metric = (key) => setState({ metric: key });
 ACTIONS.rows = () => setState({ drawer: 'rows' });
+ACTIONS.record = (i) => setState({ rec: Number(i) });
 
 function tile(m, on) {
   return `<button class="tile ${on ? 'on' : ''}" id="tile-${m.key}" data-act="metric" data-arg="${m.key}" aria-pressed="${on}">
@@ -20,7 +21,7 @@ function personaCard(p, m, row) {
     <div class="row gap12"><span class="avatar">${esc(p.initials)}</span>
       <span class="stack"><span style="font-size:18px;font-weight:600">${esc(p.label)}</span><span class="small muted">${esc(p.desc)}</span></span></div>
     <div class="row between" style="align-items:baseline;gap:12px">
-      <span class="num" style="font-size:40px;line-height:1;font-weight:600;letter-spacing:-0.01em;color:var(--blue)">${v.toFixed(6)}</span>
+      <span class="num" style="font-size:40px;line-height:1;font-weight:600;letter-spacing:-0.01em;color:var(--blue)">${missing(v) ? valueHtml('', v) : v.toFixed(6)}</span>
       <span class="row gap8 small" style="font-weight:600">${icon(ok ? 'check' : 'cross', 18, ok ? 'var(--good)' : 'var(--critical)')}${ok ? 'Matches' : 'Differs'}</span>
     </div>
     <div class="stack gap12" style="border-top:1px solid var(--line);padding-top:14px">
@@ -30,20 +31,31 @@ function personaCard(p, m, row) {
   </article>`;
 }
 
-function rowsDrawer() {
-  const tables = D.personas.map((p) => `<section class="stack gap8" style="margin-top:18px">
-      <span class="h3">${esc(p.label)}</span>
-      <div style="overflow-x:auto"><table class="tbl"><thead><tr>${p.sample.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
-      <tbody>${p.sample.rows.map((r) => `<tr>${r.map((v) => `<td class="${String(v).startsWith('***') || v === '' ? 'muted' : ''}">${v === '' ? 'hidden' : esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-    </section>`).join('');
-  return drawer('The rows each team gets', 'Same records, masked by Snowflake policy according to each role.', tables);
+function recordCell(c) {
+  // break long emails after the @ rather than mid-word
+  return c.masked
+    ? `<td class="muted"><span class="row" style="gap:5px">${icon('lock', 13)}${esc(c.text)}</span></td>`
+    : `<td>${esc(c.text).replace('@', '@<wbr>')}</td>`;
+}
+
+function rowsDrawer(s) {
+  const rec = D.records[s.rec] || D.records[0];
+  if (!rec) return drawer('The rows each team gets', 'No sample rows were returned.', '');
+  const pills = D.records.map((_, i) => `<button class="pill ${i === s.rec ? 'on' : ''}" data-act="record" data-arg="${i}" aria-pressed="${i === s.rec}">Record ${i + 1}</button>`).join('');
+  const line = (r) => `<tr><th scope="row">${esc(r.label)}</th>${r.cells.map(recordCell).join('')}</tr>`;
+  const table = `<div class="row gap8" style="position:sticky;top:0;background:var(--surface);padding:14px 0;z-index:1;flex-wrap:wrap">${pills}</div>
+    <table class="tbl rec"><thead><tr><th></th>${D.personas.map((p) => `<th>${esc(p.label)}</th>`).join('')}</tr></thead>
+      <tbody>${rec.ids.map(line).join('')}</tbody>
+      <tbody class="protected">${rec.fields.map(line).join('')}</tbody></table>`;
+  return drawer('The rows each team gets',
+    'The same record from each team’s side. Snowflake’s masking policies decide what each role sees.', table);
 }
 
 function render(s) {
   const m = D.metrics.find((x) => x.key === s.metric) || D.metrics[0];
   const row = D.grid[m.key];
   const verdict = row.identical
-    ? `All three teams get ${row.values[D.personas[0].key].toFixed(6)} for ${m.label.toLowerCase()}, identical to ${D.dp} decimal places.`
+    ? `All three teams get ${missing(row.values[D.personas[0].key]) ? 'no value' : row.values[D.personas[0].key].toFixed(6)} for ${m.label.toLowerCase()}, identical to ${D.dp} decimal places.`
     : `The teams disagree on ${m.label.toLowerCase()}. Check the persona procedures.`;
   return `<div class="root stack gap24">
     <header>
@@ -58,8 +70,8 @@ function render(s) {
       <button class="btn" data-act="rows" style="flex-shrink:0">${icon('table', 18)} <span style="margin-left:6px">See the rows each team gets</span></button>
     </section>
     ${D.practice ? `<p class="small muted" style="margin:-8px 0 0">${esc(D.practice)}</p>` : ''}
-    ${s.drawer === 'rows' ? rowsDrawer() : ''}
+    ${s.drawer === 'rows' ? rowsDrawer(s) : ''}
   </div>`;
 }
-mount(render, { metric: DATA.metrics[0].key, drawer: null });
+mount(render, { metric: DATA.metrics[0].key, drawer: null, rec: 0 });
 </script>

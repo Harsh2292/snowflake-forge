@@ -25,12 +25,14 @@ BREAKDOWNS = [
     ("category", "By product category", "Product category", "parts.category"),
     ("quarter", "By quarter", "Quarter", "orders.order_quarter"),
     ("segment", "By customer segment", "Customer segment", "customers.customer_segment"),
+    ("status", "By order status", "Order status", "orders.order_status"),
 ]
 IN_NATURAL_ORDER = {"quarter"}
+BARS_SHOWN = 12  # Explore bars and answer charts show at most this many rows; tables show all
 WHY_NOT = {  # why a breakdown is impossible (contract §4 pairings), in words
     "on_time_delivery_rate": "shipments aren’t linked to products",
     "avg_landed_cost": "shipments aren’t linked to products",
-    "days_of_inventory": "inventory isn’t linked to orders or customers",
+    "days_of_inventory": "inventory isn’t linked to orders, shipments or customers",
     "fill_rate": "",
 }
 
@@ -51,6 +53,14 @@ PRACTICE_NOTE = ("Practice values. In live mode each team’s number comes from 
                  "team’s role (contract §5.4).")
 
 
+_num = config.as_number  # float, or None where Snowflake returned NULL (JSON null → "—")
+
+
+def _by_value(rows: list[dict]) -> list[dict]:
+    """Highest value first; rows without a value (NULL) last."""
+    return sorted(rows, key=lambda r: (r["value"] is None, -(r["value"] or 0)))
+
+
 def _metric_col(key: str) -> str:
     return config.column_name(config.METRICS[key]["id"])
 
@@ -59,7 +69,7 @@ def metrics_meta() -> list[dict]:
     head = forge_data.get_all_metrics().iloc[0]
     out = []
     for key, m in config.METRICS.items():
-        value = float(head[_metric_col(key)])
+        value = _num(head[_metric_col(key)])
         out.append({"key": key, "label": m["label"], "format": m["format"], "definition": m["definition"],
                     "id": m["id"], "formula": FORMULAS[key], "unit": UNITS.get(key, ""), "overall": value,
                     "display": config.format_value(key, value) + (f" {UNITS[key]}" if key in UNITS else "")})
@@ -69,7 +79,7 @@ def metrics_meta() -> list[dict]:
 @st.cache_data(ttl=300, show_spinner=False)
 def problem(mode: str) -> dict:
     catalog = forge_data.get_source_schema_summary()
-    return {"naive": float(forge_data.get_naive_otd()), "governed": float(forge_data.get_governed_otd()),
+    return {"naive": _num(forge_data.get_naive_otd()), "governed": _num(forge_data.get_governed_otd()),
             "systems": SYSTEMS, "catalog": catalog.to_dict("records")}
 
 
@@ -114,21 +124,41 @@ def _visibility(sample: pd.DataFrame) -> list[dict]:
              ("Payment terms", "PAYMENT_TERMS"), ("Credit limit", "CREDIT_LIMIT")]]
 
 
+# The "rows each team gets" drawer: one sample record, the three teams side by side.
+RECORD_IDS = [("Part", "SAMPLE_PART_ID"), ("Supplier", "SAMPLE_SUPPLIER_ID"), ("Customer", "SAMPLE_CUSTOMER_ID")]
+RECORD_FIELDS = [("Unit cost", "UNIT_COST"), ("Contract price", "CONTRACT_PRICE"),
+                 ("Payment terms", "PAYMENT_TERMS"), ("Customer name", "CUSTOMER_NAME"),
+                 ("Customer email", "CUSTOMER_EMAIL"), ("Credit limit", "CREDIT_LIMIT")]
+MASKED_WORDS = {"*** RESTRICTED ***": "restricted", "*** MASKED ***": "masked"}
+
+
+def _cell(value) -> dict:
+    if pd.isna(value):
+        return {"text": "hidden", "masked": True}
+    if str(value) in MASKED_WORDS:
+        return {"text": MASKED_WORDS[str(value)], "masked": True}
+    return {"text": f"{value:,.2f}" if isinstance(value, float) else str(value), "masked": False}
+
+
+def _records(samples: dict) -> list[dict]:
+    """Per sample record: its IDs and each protected field as every persona sees it."""
+    count = min(len(df) for df in samples.values())
+    return [{"ids": [{"label": label, "cells": [_cell(df[col].iloc[i]) for df in samples.values()]}
+                     for label, col in RECORD_IDS],
+             "fields": [{"label": label, "cells": [_cell(df[col].iloc[i]) for df in samples.values()]}
+                        for label, col in RECORD_FIELDS]} for i in range(count)]
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def same(mode: str) -> dict:
     grid = forge_data.compare_across_personas().set_index("METRIC")
-    personas = []
-    for p in config.PERSONA_ROLES:
-        sample = forge_data.get_masking_divergence(p)
-        cols = [c for c in sample.columns if c != "PERSONA"]
-        rows = [["" if pd.isna(v) else str(v) for v in r] for r in sample[cols].itertuples(index=False)]
-        personas.append({"key": p.upper(), "label": config.PERSONA_LABELS[p], "desc": config.PERSONA_DESCRIPTIONS[p],
-                         "initials": INITIALS[p], "visibility": _visibility(sample),
-                         "sample": {"columns": [c.replace("SAMPLE_", "").replace("_", " ").title() for c in cols], "rows": rows}})
-    grid_out = {k: {"values": {p: float(grid.loc[k, p]) for p in ("PLANNER", "BUYER", "LOGISTICS")},
+    samples = {p: forge_data.get_masking_divergence(p) for p in config.PERSONA_ROLES}
+    personas = [{"key": p.upper(), "label": config.PERSONA_LABELS[p], "desc": config.PERSONA_DESCRIPTIONS[p],
+                 "initials": INITIALS[p], "visibility": _visibility(sample)} for p, sample in samples.items()]
+    grid_out = {k: {"values": {p: _num(grid.loc[k, p]) for p in ("PLANNER", "BUYER", "LOGISTICS")},
                     "identical": bool(grid.loc[k, "IDENTICAL"])} for k in config.METRICS}
-    return {"metrics": metrics_meta(), "grid": grid_out, "personas": personas, "dp": config.CONSISTENCY_DP,
-            "practice": PRACTICE_NOTE if grid.attrs.get("source") != "live" else ""}
+    return {"metrics": metrics_meta(), "grid": grid_out, "personas": personas, "records": _records(samples),
+            "dp": config.CONSISTENCY_DP, "practice": PRACTICE_NOTE if grid.attrs.get("source") != "live" else ""}
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -141,14 +171,14 @@ def explore(mode: str) -> dict:
             rows = []
             if allowed:
                 df = forge_data.get_metric(key, dimension)
-                rows = [{"name": str(n), "value": float(v)} for n, v in zip(df[config.column_name(dimension)], df[_metric_col(key)])]
+                rows = [{"name": str(n), "value": _num(v)} for n, v in zip(df[config.column_name(dimension)], df[_metric_col(key)])]
                 if bid not in IN_NATURAL_ORDER:
-                    rows.sort(key=lambda r: r["value"], reverse=True)
+                    rows = _by_value(rows)
             items.append({"id": bid, "label": label, "dim_name": dim_name, "allowed": allowed, "rows": rows,
                           "reason": "" if allowed else f"Not available for {config.METRICS[key]['label'].lower()}: {WHY_NOT[key]}.",
                           "reason_short": WHY_NOT[key]})
         breakdowns[key] = items
-    return {"metrics": metrics_meta(), "breakdowns": breakdowns}
+    return {"metrics": metrics_meta(), "breakdowns": breakdowns, "bars": BARS_SHOWN}
 
 
 PLAIN_CHECKS = {
@@ -177,7 +207,11 @@ def health(mode: str) -> dict:
     checks = []
     for r in df.itertuples():
         name, unit = PLAIN_CHECKS.get(str(r.METRIC_NAME).upper(), (str(r.METRIC_NAME), "problems"))
-        result = _age(float(r.VALUE)) if r.STATUS == "INFO" else f"{int(r.VALUE)} {unit}"
+        value = _num(r.VALUE)
+        if value is None:
+            result = "Not measured yet"
+        else:
+            result = _age(value) if r.STATUS == "INFO" else f"{int(value)} {unit}"
         checks.append({"name": name, "tech": f"{r.METRIC_NAME} on {r.TABLE_NAME}.{r.ARGUMENT_NAMES}",
                        "result": result, "status": r.STATUS})
     scored = df[df["STATUS"] != "INFO"]
@@ -186,19 +220,30 @@ def health(mode: str) -> dict:
             "checked": f"{checked:%d %b %Y, %H:%M}"}
 
 
+def _chart_window(label_col: str, rows: list[dict]) -> list[dict]:
+    """At most BARS_SHOWN rows. A time series keeps its most recent rows, in time order;
+    anything else keeps the agent's order (it ranks and limits the rows itself)."""
+    if len(rows) <= BARS_SHOWN:
+        return rows
+    if any(word in label_col.upper() for word in ("DATE", "DAY", "WEEK", "MONTH", "QUARTER", "YEAR")):
+        return sorted(rows, key=lambda r: r["label"])[-BARS_SHOWN:]
+    return rows[:BARS_SHOWN]
+
+
 def answer(question: str, result: dict) -> dict:
     """One Ask answer, for the answer card view."""
     keys = result["metric_used"]
     chart = None
     table = result["tables"][0] if result["tables"] else None
+    total = (result.get("row_counts") or [len(table or [])])[0]
     if table and len(table) >= 2 and len(table[0]) >= 2:
         label_col, value_col = list(table[0])[:2]
-        try:
-            rows = [{"label": str(r[label_col]), "value": float(r[value_col])} for r in table]
+        rows = [{"label": str(r[label_col]), "value": _num(r[value_col])} for r in table]
+        if any(r["value"] is not None for r in rows) and all(
+                r[value_col] is None or _num(r[value_col]) is not None for r in table):
             fmt = config.METRICS[keys[0]]["format"] if keys else "number"
-            chart = {"rows": rows[:12], "format": fmt, "title": f"{label_col.title()} by value"}
-        except (TypeError, ValueError):
-            chart = None
+            chart = {"rows": _chart_window(label_col, rows), "total": total, "format": fmt,
+                     "title": f"{label_col.replace('_', ' ').title()} by value"}
     return {
         "question": question, "answer": result["answer"] or "The agent returned no text.",
         "sql": result["sql"] or "", "verified": bool(result["verified_query_used"]),

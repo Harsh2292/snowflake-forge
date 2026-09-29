@@ -17,7 +17,7 @@ session, each carrying its own gate.
 
 ```
 .agents/NEXT.md                 ← what to do right now
-.agents/tasks/coco/B01…B17.md   ← your cards
+.agents/tasks/coco/B01…B15.md   ← your cards (replanned 2026-09-29: see COCO_TASKS.md)
 .agents/tasks/claude/C01…C06.md ← Claude Code's cards
 ```
 
@@ -78,17 +78,23 @@ A governed "single source of truth" for supply chain data in Snowflake:
 | Database setup | `sql/01_setup/` | `sql-author` |
 | Table DDL | `sql/02_tables/` | `sql-author` |
 | Sample data | `sql/03_sample_data/` | `sql-author` |
-| Governance | `sql/04_governance/` | `data-governance` |
-| Data quality | `sql/05_quality/` | `data-quality` |
-| Semantic views | `semantic/` | `agent-studio` |
+| Governance + `CONFORMED` layer | `sql/04_governance/` | `data-governance`, `dynamic-tables` |
+| Data quality (running Claude Code's `quality/` SQL; wiring DMFs) | — | `data-quality` |
+| Semantic views + generator | `semantic/` | `agent-studio` |
 | Cortex Agent | `agent/` | `agent-studio` |
 | Lineage validation | — | `lineage` |
+
+Full ownership table and the handoff lock for Claude Code's SQL:
+`.agents/tasks/COCO_TASKS.md` § "Working with Claude Code" (replanned 2026-09-29).
 
 ### DO NOT TOUCH (Claude Code owns these)
 
 - `app/` — Streamlit demo application
-- `tests/` — Cross-persona consistency tests
-- `demo/` — Demo presentation scripts
+- `tests/` (incl. `tests/scale/`) — tests and the scale harness
+- `demo/`, `deploy/`, `.github/`, `docs/references/`, `README.md`
+- `data_gen/`, `quality/`, `eval/` — Claude Code's Snowflake SQL. **CoCo runs these files
+  but never edits them**, except small run-blocking fixes recorded as a diff in
+  `docs/artifacts/runs/<card>_run.md`.
 
 ## Snowflake Connection
 
@@ -105,8 +111,33 @@ A governed "single source of truth" for supply chain data in Snowflake:
 - Semantic views support `AI_VERIFIED_QUERIES`, `AI_SQL_GENERATION`,
   `AI_QUESTION_CATEGORIZATION` in DDL
 - `SNOWFLAKE.CORTEX.DATA_AGENT_RUN()` available — agent callable from plain SQL
-- Credits consumed to date: 0.43 of ~$390 budget. Not a constraint; keep warehouses XS
-  with 60s auto-suspend and avoid materializations.
+- **Budget (checked 2026-09-29)**: $400 of free usage, **ending 2026-10-18**. About $138 spent,
+  about $262 left.
+  - Cortex Code is ~85% of spend. It's billed per token at $2/credit, and the 29 Sep session
+    alone cost ~$45.
+  - Warehouses are ~15% ($3/credit). COMPUTE_WH (10-min auto-suspend) is 94% of warehouse credits.
+  - **Budget is a constraint.** Keep CoCo sessions short with small context, and use subagents
+    sparingly.
+  - Keep warehouses XS with 60s auto-suspend. Pick lags and schedules to save cost (see
+    SESSION_LOG Session 24, "Credit check").
+
+### Account switch plan (user-approved 2026-09-29)
+
+The organisers issued a new **event account**: $400, 30 days from signup, and the claim
+window closes **3 Oct 2026 UTC**. There's no top-up to the old account. The plan uses both:
+
+| When | What | Account |
+|---|---|---|
+| **29 Sep (today)** | The user claims the event account: "AI Data Cloud" flow (not "Cortex Code CLI"), same registration email, **Enterprise** edition, **Azure Central India** if offered (fallback order: AWS Asia Pacific Mumbai → AWS US West Oregon; avoid GCP). Then adds a VS Code connection. | new (idle) |
+| 29 Sep → 1 Oct | Build as planned (B09, B09a, B08c, B10, B12), plus the **B13 scale proof on Day 3**: its art 12 doesn't depend on the account, so old credits pay for the costly run | **old** `DA53081` |
+| **30 Sep** | **B08m trial move**: account setup + replay the v1 baseline in the new account, to catch edition, region or Cortex problems early (~$3–5) | new |
+| **End of 1 Oct** (or sooner if the old balance drops below ~$60) | **B08m cutover**: replay the full build from the repo, regenerate the data (deterministic), re-verify art 03–10 numbers match | new |
+| 2 Oct → results | B14 live tests + security review, B15 cost controls + deploy (the submitted app link), a short eval smoke run, final artifacts, then the buffer. The old account is no longer used. | **new** |
+
+**Rule until the cutover: nothing is built by hand.** Every object (DDL, grants, the agent,
+Cortex Search, DTs, DMF attachments, schedules, the app deploy) must exist as a re-runnable
+repo script, so the cutover is a replay. The code is account-agnostic (only docs name
+`DA53081`); keep it that way.
 
 ## Coordination Protocol
 

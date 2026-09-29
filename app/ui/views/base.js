@@ -29,14 +29,28 @@ function icon(name, size = 22, color = 'currentColor', width = 1.8) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${width}" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
 
+/* Snowflake returns NULL where a metric has nothing to measure; payloads send it as null. */
+const MISSING = '\u2014';
+const MISSING_NOTE = 'No value: nothing in this group meets the metric\u2019s definition';
+function missing(v) { return v === null || v === undefined || Number.isNaN(v); }
+function diff(a, b) { return missing(a) || missing(b) ? null : a - b; }
+/* A value, or the dash with its explanation as a tooltip. */
+function valueHtml(kind, v) {
+  return missing(v) ? `<span class="muted" title="${MISSING_NOTE}">${MISSING}</span>` : fmt(kind, v);
+}
+function listJoin(items) {
+  return items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + ' or ' + items[items.length - 1];
+}
+
 function fmt(kind, v) {
-  if (v === null || v === undefined || Number.isNaN(v)) return '';
+  if (missing(v)) return MISSING;
   if (kind === 'percent') return (v * 100).toFixed(1) + '%';
   if (kind === 'currency') return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return v.toFixed(1);
 }
 
 function deltaText(kind, d, unit) {
+  if (missing(d)) return MISSING;
   const a = Math.abs(d);
   if (a < 1e-9) return 'Same as overall';
   const size = kind === 'percent' ? (a * 100).toFixed(1) + ' points' : kind === 'currency' ? '$' + a.toFixed(2) : a.toFixed(1) + (unit ? ' ' + unit : '');

@@ -6,8 +6,8 @@
 | **Milestone** | M2 → M3 (CoCo B07 + B07b done; Stage 1 artifacts DONE) |
 | **Prerequisite** | C04 ✅; artifacts `03_governed_columns.json`, `04_persona_outputs.json` (CoCo, 2026-09-27) |
 | **Est. effort** | Half a session |
-| **Writes** | `tests/artifacts/` (new), `tests/conftest.py` (artifact helper), `app/utils/mock_data.py` (real sample rows), `app/utils/config.py` (§7 column list), `tests/unit/test_data_layer.py` |
-| **Status** | ⏸ **PLANNED, ON HOLD** 2026-09-27: the user paused it (not approved yet; user away 28–30 Sep). Resume by getting approval for the Steps below. Done already: the v1.4 `fill_rate` string (CR-005) in `config.py`, plus a test that `config.py` matches the contract's own Python blocks (188 passed). |
+| **Writes** | `tests/artifacts/` (new), `tests/conftest.py` (artifact helper, replay), `tests/governance/test_masking.py`, `app/utils/mock_data.py` (real sample rows), `app/utils/config.py` (§5.4 and §7 column lists), `tests/unit/test_data_layer.py`, plus the Same screen drawer (`app/ui/payloads.py`, `views/same.html`, `views/base.css`, `tests/ui/test_browser.py`) |
+| **Status** | ✅ **DONE** 2026-09-28. Approved by the user on 2026-09-28. 0 mismatches, no Change Request. `pytest -q` 227 passed, `pytest -m ui` 18 passed. See **Result**. |
 
 ---
 
@@ -79,6 +79,45 @@ Not in scope: metric values and dimensions (C6b, art 05/06), agent parsing (C6c,
 - Replaying art 04 through the live code path passes every §6 masking check.
 - Mock sample rows equal art 04; `pytest -m ui` green.
 - Zero unexplained mismatches; any real one becomes a Change Request, never a silent fix.
+
+---
+
+## Result (2026-09-28)
+
+**Gate: passed.** Every item below is checked by a test that runs offline on every push.
+
+| Check | Result |
+|---|---|
+| Art 03: 9 views, 65 columns, names and order = §7 (`config.GOVERNED_COLUMNS`) | ✅ |
+| Art 03: masking policies on exactly the six §6 columns; promised date only on `V_SHIPMENT` | ✅ |
+| Art 04: owner = persona role; 10 §5.4 columns in order with §5.4 types; same IDs for all 3 | ✅ |
+| Art 04 captured as `FORGE_ADMIN` with no secondary roles (masking came from the procedures) | ✅ |
+| Replay: all six §6 rows × 3 personas pass on art 04 via the live code path | ✅ 18 + 3 shape |
+| Practice rows (`mock_data`) == art 04 as read through the live path | ✅ |
+| Same screen chips and rows drawer follow the real rows | ✅ |
+| Break-it: 10 planted errors in copies of art 03/04 (renamed column, dropped policy, ERP date, wrong mask ×3, column order, owner, value, secondary roles) | ✅ all red |
+
+**How it differs from the Steps above:**
+- **The replay runs inside `test_masking.py`** as a third `forge` mode, `[replay]` (via
+  indirect parametrisation), not as a copy of the §6 checks. The same six checks now run
+  on mock, live and real captured data. `ReplaySession` in `tests/conftest.py` serves
+  art 04 like Snowpark: NUMBER as `Decimal`, NULL as `None`, columns in `result_columns`
+  order. Any other statement raises, so a fallback to mock fails the test.
+- **`config.SAMPLE_COLUMNS` (§5.4)** was added next to `GOVERNED_COLUMNS`. The masking
+  tests and `mock_data` use it, and a unit test checks it against the §5.4 table.
+- **`mock_data.masking_sample()` masks the captured rows by `config.MASKING_MATRIX`.** The
+  real values are stored once, and its NUMBER columns are float/NaN, exactly what the
+  live branch returns.
+- **Same screen drawer redesigned (the user chose this, 2026-09-28).** With real data, the
+  10-column per-team tables wrapped customer names onto 5 lines and cut off the email
+  column behind a sideways scroll. The drawer now shows **one record with the three teams
+  side by side**, with Record 1/2/3 buttons:
+  - The rows are IDs first, then the six protected fields.
+  - Masked values read "hidden", "restricted" or "masked" with a lock icon.
+  - `payloads.same()` sends ready-to-render `records`.
+  - The browser test checks the headers, the record switch, and that the table doesn't
+    overflow sideways.
+  - Checked in light and dark screenshots.
 
 ---
 

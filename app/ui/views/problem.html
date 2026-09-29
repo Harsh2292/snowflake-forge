@@ -50,7 +50,8 @@ function columnsDrawer(s) {
 }
 
 function render(s) {
-  const gap = Math.abs(D.governed - D.naive) * 100;
+  const both = !missing(D.governed) && !missing(D.naive);
+  const gap = both ? Math.abs(D.governed - D.naive) * 100 : 0;
   return `<div class="root stack gap32">
     <header>
       <h1 class="h1">Four systems, four versions of the truth</h1>
@@ -64,7 +65,7 @@ function render(s) {
       <div class="stack gap16">
         <span class="h2">Leadership asks: &ldquo;What is our on-time delivery rate?&rdquo;</span>
         <p class="body" style="margin:0">Planning counts deliveries against the ERP order&rsquo;s promised date. Logistics counts
-          against the carrier&rsquo;s promised date. Same shipments, ${gap.toFixed(1)} points apart, and nobody trusts either number.</p>
+          against the carrier&rsquo;s promised date. Same shipments, ${both ? gap.toFixed(1) + ' points' : 'far'} apart, and nobody trusts either number.</p>
         <div><button class="btn" data-act="openColumns">${icon('table', 18)} <span style="margin-left:6px">See every source column</span></button></div>
       </div>
       <div class="stack">
@@ -76,7 +77,7 @@ function render(s) {
             <span class="num" style="font-size:48px;line-height:1;font-weight:600;color:var(--blue)">${fmt('percent', D.governed)}</span>
             <span class="small muted">using the carrier&rsquo;s promised date</span></div>
         </div>
-        ${dumbbell(D.naive, D.governed)}
+        ${both ? dumbbell(D.naive, D.governed) : ''}
       </div>
     </section>
     ${s.drawer === 'columns' ? columnsDrawer(s) : ''}

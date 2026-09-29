@@ -22,8 +22,11 @@ def test_valid_pairing_returns_rows(forge, metric_key, dimension):
     if dimension in config.DIMENSION_VALUES:
         unexpected = set(df[dim_col].astype(str)) - set(config.DIMENSION_VALUES[dimension])
         assert not unexpected, f"{dimension} values outside contract §4: {sorted(unexpected)}"
-    values = df[metric_col].astype(float)
-    assert values.notna().all()
+    # NULL is a legitimate answer for a group with nothing to measure (art 05: fill rate for
+    # OPEN/CANCELLED orders, CR-005; OTD on days with no delivered shipment). At least one
+    # group has a value, and every value is in bounds.
+    values = df[metric_col].astype(float).dropna()
+    assert len(values) > 0, "every group is NULL"
     if config.METRICS[metric_key]["format"] == "percent":
         assert values.between(0, 1).all()
     else:

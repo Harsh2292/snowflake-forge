@@ -28,6 +28,10 @@
 
 ## 2. Source Table Schemas (deliberately inconsistent naming)
 
+> **Superseded for v2 data (2026-09-29)**: `docs/DATA_SPEC.md` §1 (10 tables, `LOAD_TS`,
+> currencies, wider IDs, keys-only `NOT NULL`) and §2 (volumes). This section and §3 describe
+> the v1 data (B03/B04) and stay as history.
+
 ### 2.1 `SRM_SOURCE` — Supplier Relationship Management
 
 **`SRM_SOURCE.LFA1` (suppliers)** — SAP-style table name
@@ -411,7 +415,11 @@ SELECT TRY_PARSE_JSON(
 
 ---
 
-## 7a. MCP Server Specification
+## 7a. MCP Server Specification  ❌ DROPPED 2026-09-29
+
+> **❌ DROPPED 2026-09-29 (user decision).** The MCP server is not built: it doesn't help
+> the core system deliver correct answers. This section is kept as history only. If
+> customers ask for it after the hackathon, it's tracked in `docs/ROADMAP.md`.
 
 The Snowflake-managed MCP server exposes the governed ontology to any MCP client
 (Claude Code during development; judges' tooling as a talking point).
@@ -465,31 +473,36 @@ CREATE OR REPLACE MCP SERVER SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_MCP_RO
 
 ## 8. Build Order (strict — each step gated on the previous)
 
+> **Replanned 2026-09-29 (user-approved).** B1–B8 are as built. From B8b on, the sequence
+> below replaces the original one. The detailed queue is `.agents/tasks/COCO_TASKS.md`.
+
 | Step | What | Gate before moving on |
 |------|------|----------------------|
 | **B1** | Database, 7 schemas, `FORGE_WH` | `SHOW SCHEMAS` returns 7 |
 | **B2** | 4 roles + grants (incl. **default-role** grants for agent) | `SHOW GRANTS TO ROLE` verified per role |
-| **B3** | 10 source tables across 4 source schemas | `SHOW TABLES` returns 10 |
-| **B4** | Data generation, in FK order: suppliers → parts → sourcing → plants → customers → orders → lines → shipments → inventory | Row counts match §3 targets |
+| **B3** | 9 source tables across 4 source schemas | `SHOW TABLES` returns 9 |
+| **B4** | Data generation v1 (small and clean), in FK order | Row counts match §3 targets |
 | **B5** | Raw metric sanity SQL (before any semantic layer) | OTD ≈ 0.87, fill ≈ 0.93, DOI 15–45 |
-| **B6** | Tags + masking policies + row access policy | Each persona sees expected masked values |
-| **B7** | 9 governed conformed views | `SELECT *` works for each, as each role |
-| **B8** | Semantic view — **2 tables first** (shipments + orders), validate, then grow to 9 | `SELECT FROM SEMANTIC_VIEW(...)` returns each metric |
-| **B9** | Add `AI_VERIFIED_QUERIES` + AI instructions | `DESCRIBE SEMANTIC VIEW` shows all VQRs |
-| **B10** | Cortex Agent | `DATA_AGENT_RUN` returns a grounded answer |
-| **B11** | Cross-persona consistency SQL check | All 4 metrics identical across 3 roles |
-| **B12** | DMFs | `DATA_QUALITY_MONITORING_RESULTS` populated |
-| **B13** | **Contract conformance audit** against `docs/CONTRACT.md` | Zero deviations, or all filed as Change Requests |
-| **B14** | MCP server(s) per §7a | Tool discovery returns expected tools |
-| **B15** | **Handoff** — update `HANDOFF.md` with FQNs + measured values | Claude Code unblocked for Track C6 |
-| **B16** | Lineage trace, edge-case suite, multilingual test | Each produces a demo-ready artifact |
-| **B17** | SQL + security review sweep | `sql-verify` clean; no over-broad grants |
+| **B6** | Tags + masking policies (row access policy dropped, GAP-4) | Each persona sees expected masked values |
+| **B7** | 9 governed conformed views; **B7b** persona procedures | `SELECT *` works for each, as each role |
+| **B8** | Semantic view — **2 tables first**, then 9; `SP_METRICS_AS_*` | `SELECT FROM SEMANTIC_VIEW(...)` returns each metric |
+| **B8b** | Data spec v2 (`docs/DATA_SPEC.md`) + CR-006 | The user approves CR-006 |
+| **B8c** | Load Claude Code's generated data; `CONFORMED` cleansing layer (dynamic tables) under the governed views | §7 unchanged; repairable defects cleaned; §3 ranges hold |
+| **B9** | Semantic view v2: wider, AI instructions, verified queries; re-capture art 05/06/09 | `DESCRIBE SEMANTIC VIEW` shows all VQRs; §4 matrix passes |
+| **B10** | Cortex Agent + evaluation set | Canonical answers match; pass rate recorded |
+| **B12** | DMFs on `SOURCE` and `CONFORMED` | `DATA_QUALITY_MONITORING_RESULTS` populated |
+| **B13** | Scale proof on a zero-copy clone | Same definitions and SQL shape at scale; cost recorded |
+| **B14** | **Contract conformance audit** + security review | Zero deviations, or all filed as Change Requests |
+| **B15** | Production hardening + deploy to SiS | App live; cost controls in place |
+
+B11 (consistency) is merged into B9; the old B14 (MCP) is dropped; B16/B17 are merged into
+B10, B13 and B14.
 
 > **B8 is the highest-risk step.** Semantic view validation rules are strict about
 > fact/dimension/metric ordering and granularity. Build it with 2 tables, confirm a
 > metric returns, then add tables incrementally. Do not write 9 entities blind.
 
-> **B13 is the integration insurance.** Claude Code builds the whole app against
+> **B14 is the integration insurance.** Claude Code builds the whole app against
 > `docs/CONTRACT.md` while this is in progress. If Snowflake reality drifts from the
 > contract and nobody audits it, the two halves will not meet.
 
@@ -538,10 +551,14 @@ Additionally assert **divergence** where expected:
 | `sql/04_governance/03_row_access_policies.sql` | B6 |
 | `sql/04_governance/04_governed_views.sql` | B7 |
 | `semantic/01_semantic_view.sql` | B8, B9 |
+| `data_gen/*` (Claude Code, C08) | run by CoCo at B8c and B13 |
+| `sql/04_governance/06_conformed.sql` | B8c |
 | `agent/01_agent.sql` | B10 |
-| `sql/05_quality/01_dmfs.sql` | B12 |
-| `tests/consistency/*` | B11, B15 |
-| `app/*` | B14 |
+| `quality/*` (Claude Code, C10: DMFs + `SP_DATA_HEALTH`) | run by CoCo at B12 |
+| `eval/*` (Claude Code, C11) | run by CoCo at B10 |
+| `tests/scale/*` (Claude Code, C12) | run by CoCo at B13 |
+| `tests/consistency/*` | B09 (art 09), B15 |
+| `app/*` | deployed at B15 |
 
 > Note: existing per-entity placeholder files in `sql/02_tables/` will be consolidated
 > into the four source-system files above.

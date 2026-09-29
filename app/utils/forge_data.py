@@ -130,11 +130,32 @@ def _run(label: str, live_fn, mock_fn):
     if config.USE_MOCK_DATA:
         return _tag(mock_fn(), "mock")
     try:
+        _tag_queries(label.split("(")[0])
         return _tag(live_fn(), "live")
     except Exception as exc:  # the UI must never see a stack trace on stage
         code = getattr(exc, "sql_error_code", None) or getattr(exc, "error_code", None)
         _notices.append(Notice(label, str(exc).splitlines()[0][:300], code))
         return _tag(mock_fn(), "mock_fallback")
+
+
+_query_tag = {"path": None, "enabled": True}
+
+
+def _tag_queries(path: str) -> None:
+    """Label the session's queries per app path (e.g. forge_app:get_metric), so query
+    history attributes credits to each path (core system rule 9). Owner's-rights apps may
+    refuse the session change; then tagging is switched off once, silently (verify at B15)."""
+    if not _query_tag["enabled"] or _query_tag["path"] == path:
+        return
+    try:
+        session = get_session()
+    except Exception:
+        return  # no session: the live call itself reports why
+    try:
+        session.query_tag = f"forge_app:{path}"
+        _query_tag["path"] = path
+    except Exception:
+        _query_tag["enabled"] = False
 
 
 def _tag(result, source: str):
@@ -204,7 +225,8 @@ def compare_across_personas(metric_key=None) -> pd.DataFrame:
     """Each metric computed as each persona role (CR-002 procedures).
 
     Columns: METRIC, LABEL, PLANNER, BUYER, LOGISTICS, IDENTICAL, where IDENTICAL means
-    the values match after rounding to config.CONSISTENCY_DP places.
+    the values match after rounding to config.CONSISTENCY_DP places. A NULL (None) matches
+    only another NULL.
     """
     keys = [metric_key] if metric_key else list(config.METRICS)
     for key in keys:
@@ -214,8 +236,8 @@ def compare_across_personas(metric_key=None) -> pd.DataFrame:
         records = []
         for key in keys:
             col = config.column_name(config.METRICS[key]["id"])
-            values = {p.upper(): float(rows_by_persona[p][col]) for p in PERSONAS}
-            rounded = {round(v, config.CONSISTENCY_DP) for v in values.values()}
+            values = {p.upper(): config.as_number(rows_by_persona[p][col]) for p in PERSONAS}
+            rounded = {None if v is None else round(v, config.CONSISTENCY_DP) for v in values.values()}
             records.append({"METRIC": key, "LABEL": config.METRICS[key]["label"],
                             **values, "IDENTICAL": len(rounded) == 1})
         return pd.DataFrame(records)
@@ -271,17 +293,17 @@ def _mock_agent_raw(question: str) -> dict:
         sql=build_metric_sql(metric_key, dimension), frame=frame)
 
 
-def get_naive_otd() -> float:
-    """OTD using ERP's promised date (the wrong one). Contract §8, for Tab 3."""
+def get_naive_otd():
+    """OTD using ERP's promised date (the wrong one). Contract §8, for Tab 3. None if NULL."""
     return _run("get_naive_otd",
-                lambda: float(_query(NAIVE_OTD_SQL).iloc[0, 0]),
+                lambda: config.as_number(_query(NAIVE_OTD_SQL).iloc[0, 0]),
                 lambda: mock_data.MOCK_NAIVE_OTD)
 
 
-def get_governed_otd() -> float:
-    """OTD from the semantic view (the authoritative one). Contract §8, for Tab 3."""
+def get_governed_otd():
+    """OTD from the semantic view (the authoritative one). Contract §8, for Tab 3. None if NULL."""
     df = get_metric("on_time_delivery_rate")
-    return float(df.iloc[0, 0])
+    return config.as_number(df.iloc[0, 0])
 
 
 def get_source_schema_summary() -> pd.DataFrame:
@@ -321,6 +343,8 @@ def _join_json_list(value) -> str:
 def _add_quality_status(df: pd.DataFrame) -> pd.DataFrame:
     def status(row):
         name = str(row["METRIC_NAME"]).upper()
+        if config.as_number(row["VALUE"]) is None:
+            return "INFO"  # not measured yet: neither a pass nor a failure
         if name in _QUALITY_EXPECT_ZERO:
             return "PASS" if row["VALUE"] == 0 else "FAIL"
         return "INFO"

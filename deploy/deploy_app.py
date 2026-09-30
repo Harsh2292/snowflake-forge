@@ -1,7 +1,7 @@
 """Deploy the app to Streamlit in Snowflake (warehouse runtime), or redeploy it after a change.
 
-Uploads every file under app/ to a stage, keeping its folders (utils/, ui/, ui/screens/,
-ui/views/, .streamlit/), then creates or replaces SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO and
+Uploads every file under app/, plus deploy/sis/environment.yml, to a stage, keeping its
+folders (utils/, ui/, ui/screens/, ui/views/, .streamlit/), then creates or replaces SUPPLY_CHAIN_FORGE.APP.FORGE_DEMO and
 makes it live. Run by CoCo (build step B15), from the repo root:
 
     set SNOWFLAKE_CONNECTION_NAME=<connection>        # same connection as pytest -m live
@@ -31,24 +31,31 @@ APP_OWNER_ROLE = "FORGE_ADMIN"  # owns the app; the persona procedures grant it 
 MAIN_FILE = "streamlit_app.py"
 TITLE = "Supply Chain Forge"
 REQUIRED = {MAIN_FILE, "environment.yml"}  # SiS warehouse runtime reads environment.yml
+# SiS's conda file lives outside app/, so Community Cloud installs from app/requirements.txt
+# (C15). It is uploaded to the stage root under its usual name.
+EXTRA_FILES = {Path("environment.yml"): ROOT / "deploy" / "sis" / "environment.yml"}
 
-# Local-only: pip dependencies (SiS uses environment.yml), bytecode, secrets.
+# Local-only: pip dependencies (SiS uses environment.yml), bytecode, secrets and keys.
 SKIP_NAMES = {"requirements.txt", "secrets.toml"}
 SKIP_DIRS = {"__pycache__"}
-SKIP_SUFFIXES = {".pyc"}
+SKIP_SUFFIXES = {".pyc", ".p8", ".pem", ".key"}
 
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 
 
 def app_files(app_dir: Path = APP_DIR) -> list[Path]:
-    """Every file to upload, relative to app/."""
+    """Every file to upload, as its path on the stage (relative to app/)."""
     files = []
     for path in sorted(app_dir.rglob("*")):
         rel = path.relative_to(app_dir)
         if (path.is_file() and not SKIP_DIRS & set(rel.parts)
                 and path.name not in SKIP_NAMES and path.suffix not in SKIP_SUFFIXES):
             files.append(rel)
-    return files
+    return files + [rel for rel, source in EXTRA_FILES.items() if source.is_file()]
+
+
+def local_path(rel: Path) -> Path:
+    return EXTRA_FILES.get(rel, APP_DIR / rel)
 
 
 def stage_folder(rel: Path) -> str:
@@ -84,7 +91,7 @@ def deploy(session, files: list[Path], before: list[str], after: list[str]) -> N
         print(f"  {sql.splitlines()[0]}")
         session.sql(sql).collect()
     for rel in files:
-        results = session.file.put((APP_DIR / rel).as_posix(), stage_folder(rel),
+        results = session.file.put(local_path(rel).as_posix(), stage_folder(rel),
                                    auto_compress=False, overwrite=True)
         status = results[0].status if results else "NO RESULT"
         if status.upper() not in ("UPLOADED", "SKIPPED"):

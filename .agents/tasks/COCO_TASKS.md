@@ -270,21 +270,22 @@ this, so it has to be exact and it goes first.**
 - [ ] **Gate**: the user approves CR-006; Claude Code confirms in HANDOFF that the spec is
       implementable
 
-### B8c — Load + cleansing layer (Day 2)
-Card `coco/B08c_conformed_layer.md`.
-- [ ] Apply the B8b source DDL changes
-- [ ] **Run C08** under the handoff lock: compile check, a dry run at a small scale factor,
-      then the main DB at `SCALE_FACTOR = 1` → `docs/artifacts/runs/C08_run.md`
-- [ ] Create schema `CONFORMED`: one dynamic table per entity that dedupes, standardizes
+### B8c — Load + cleansing layer (Day 2) ✅ done 2026-09-29, gate 7/7
+Card `coco/B08c_conformed_layer.md`. Reports `docs/artifacts/runs/B08c_run.md`, `C08_run.md`.
+- [x] Apply the B8b source DDL changes (`sql/02_tables/05_source_v2.sql`)
+- [x] **Run C08** under the handoff lock: compile check, a dry run at a small scale factor,
+      then the main DB at `SCALE_FACTOR = 1` → `docs/artifacts/runs/C08_run.md` (3 small fixes)
+- [x] Create schema `CONFORMED`: one dynamic table per entity that dedupes, standardizes
       codes, converts to USD and applies the B8b rules. Cluster the big tables by date.
       Set a target lag, and check that each table refreshes incrementally; if one can't,
-      record the fallback.
-- [ ] Point the 9 `GOVERNED` views at `CONFORMED`: same names, columns and order;
+      record the fallback. (All 10 INCREMENTAL, no fallback)
+- [x] Point the 9 `GOVERNED` views at `CONFORMED`: same names, columns and order;
       masking and tags inline, unchanged, **plus the `SEMANTIC_ROLE` tag on every column**
       (used by B09a)
-- [ ] **Regenerate the semantic view** with `SP_BUILD_SEMANTIC_VIEW` (B09a)
-- [ ] Re-capture art 03 and art 04
-- [ ] **Gate**:
+- [ ] ~~**Regenerate the semantic view** with `SP_BUILD_SEMANTIC_VIEW` (B09a)~~ → moved to
+      B09/B09a (the user put B09 on standby). The B08 view was re-run as-is and validated
+- [x] Re-capture art 03 and art 04
+- [x] **Gate** (7/7, live 2026-09-29):
   - §7 columns identical to the previous art 03
   - each repairable defect present in `SOURCE` at the spec rate, and absent in `CONFORMED`
   - each edge-case rule applied as specified
@@ -292,14 +293,14 @@ Card `coco/B08c_conformed_layer.md`.
   - the §8 naive OTD further from the governed OTD than before
   - persona roles can't read `SOURCE` or `CONFORMED`
 
-### B9 — Semantic view v2 (build Day 1, capture Day 2)
+### B9 — Semantic view v2 (build Day 1, capture Day 2) ✅ done 2026-09-29, gate 7/7
 Card `coco/B09_semantic_view_v2.md`. Built by hand first in `semantic/01_semantic_view.sql`
 (still `CREATE OR REPLACE … COPY GRANTS`); B09a then generates the same view from metadata.
 - **Carried in from B08** (2026-09-28):
-  - [ ] The supplier fan-out: fixed by a primary-sourcing logical table (one supplier per
+  - [x] The supplier fan-out: fixed by a primary-sourcing logical table (one supplier per
         part), with the `AI_SQL_GENERATION` ban as the fallback if that table can't be built
-  - [ ] After each re-run, re-check persona `SELECT` and `SP_METRICS_AS_*`
-- [ ] **Expose every business column** of the governed views once:
+  - [x] After each re-run, re-check persona `SELECT` and `SP_METRICS_AS_*`
+- [x] **Expose every business column** of the governed views once:
   - IDs (order, shipment, part, supplier, customer, plant) for record lookups
   - every descriptive column; every number as a fact (quantities, prices, lead time,
     reliability, on-hand, reserved, reorder point, daily usage, freight, duty, handling,
@@ -307,30 +308,34 @@ Card `coco/B09_semantic_view_v2.md`. Built by hand first in `semantic/01_semanti
   - derived: days late, transit days, is-late, below-reorder-point; year, quarter and month
     for every date
   - **never** the 4 masked money columns. Customer name is a label only; group by customer ID.
-- [ ] **Named metrics**: the 4 canonical ones unchanged, plus about 10 common ones (counts,
+- [x] **Named metrics**: the 4 canonical ones unchanged, plus about 10 common ones (counts,
       late and delayed shipments, revenue, units, total landed cost, average days late and
       transit time, average lead time and reliability, parts below reorder point). Analyst
       aggregates every other exposed fact on its own (verified live 2026-09-29).
-- [ ] **Named filters**: late, delivered, critical parts, open orders
-- [ ] A business description for every table and column; synonyms trimmed to trade terms
-- [ ] `AI_SQL_GENERATION`: canonical metrics only, never the ERP promised date, the B8b
+- [x] **Named filters**: late, delivered, critical parts, open orders
+- [x] A business description for every table and column; synonyms trimmed to trade terms
+- [x] `AI_SQL_GENERATION`: canonical metrics only, never the ERP promised date, the B8b
       time rule, top-N and limits, amounts in USD, group by IDs not masked labels, numbered
       multi-part questions answered in order
-- [ ] `AI_QUESTION_CATEGORIZATION`: the view's scope; refuse out-of-scope questions; ask when
+- [x] `AI_QUESTION_CATEGORIZATION`: the view's scope; refuse out-of-scope questions; ask when
       ambiguous
-- [ ] Verified queries: the 8 §9 questions (Q8 = `vq_worst_plants_otd`, CR-003) plus about
+- [x] Verified queries: the 8 §9 questions (Q8 = `vq_worst_plants_otd`, CR-003) plus about
       4 cross-functional ones
-- [ ] **Captures on the B8c data**: art 05, art 06, and **art 09** (B11 merged in):
+- [x] **Captures on the B8c data**: art 05, art 06, and **art 09** (B11 merged in):
       `SP_METRICS_AS_*` × 3 plus the masking divergence from `SP_SAMPLE_AS_*`
-- [ ] **Gate (build, on today's data)**:
+- [x] **Gate (build, on today's data)**:
   - the canonical values identical to B08 (the expansion changed no numbers)
   - the §4 matrix passes; every verified query runs
   - **fast**: the view stays under a 25K-token estimate, and Analyst latency on 5 test
     questions is no worse than with v1
-- [ ] **Gate (captures)**: art 05/06/09 re-captured; art 09 identical across personas to 6 dp
+- [x] **Gate (captures)**: art 05/06/09 re-captured; art 09 identical across personas to 6 dp
 
 ### B9a — Metadata-driven generator + name search (Day 1)
-Card `coco/B09a_sv_generator.md`. Makes adding tables near-automatic.
+**Reduced 30 Sep (user-approved): card `coco/B09a_verified_queries_speed.md`.** Built: 3 verified
+queries (Q15, Q21, Q23) + the agent-speed pass; `b10-v2` 30/30 in the old account. The generator
+and name search below are dropped (roadmap material).
+
+Card `coco/B09a_sv_generator.md` (not written: dropped). Makes adding tables near-automatic.
 - [ ] Tag `GOVERNED.SEMANTIC_ROLE` (`KEY` / `DIMENSION` / `FACT` / `EXCLUDE`) on every
       governed-view column; masked columns are always `EXCLUDE`. Column comments become the
       descriptions.
@@ -348,8 +353,9 @@ Card `coco/B09a_sv_generator.md`. Makes adding tables near-automatic.
 - If it slips, the hand-written B09 view ships and the generator moves to `docs/ROADMAP.md`.
 
 ### B8m — Move to the event account (trial Day 2, cutover end of Day 3)
-Plan: `COCO.md`, "Account switch plan". Needs the user to claim the event account and add a
-VS Code connection first.
+Plan: `COCO.md`, "Account switch plan". **Card: `coco/B08m_account_switch.md`** (prepared 30 Sep:
+the user switched the plan to "cutover now"; the trial move is folded into the cutover; the new
+account is `QURFOQP-XU04029`, set up and empty).
 - [ ] **Account setup** (new account):
   - `CORTEX_ENABLED_CROSS_REGION = 'ANY_REGION'`
   - FORGE_WH (XS, 60 s auto-suspend); COMPUTE_WH auto-suspend 60 s
@@ -372,13 +378,45 @@ VS Code connection first.
 - [ ] **Gate:** the replay needs no hand fixes, or every fix is committed back to the repo
   script. The numbers match, and the old account is left idle.
 
+### B15a — Public live link trial on Streamlit Community Cloud (Day 2, old account; ADR-009) 🔄 Snowflake side done 2026-09-30
+Card `coco/B15a_public_link_trial.md`. Proves the submitted link works on live data before
+we depend on it.
+- [x] **Script `sql/05_app_access/01_app_service_user.sql`** (re-runnable, no account names):
+  - role `FORGE_APP_ROLE`, read-only: `USAGE` on `FORGE_WH`, `SELECT` on the semantic view
+    and the 9 governed views, `USAGE` on the 6 persona procedures, `SP_DATA_HEALTH` and the
+    agent, `SNOWFLAKE.CORTEX_USER`, and `SELECT` on `TMS_SOURCE.VTTK` + `ERP_SOURCE.VBAK` for
+    the §8 naive query only
+  - user `FORGE_APP_SVC` `TYPE = SERVICE`, `DEFAULT_ROLE = FORGE_APP_ROLE` (agents use the
+    default role), `DEFAULT_WAREHOUSE = FORGE_WH`, `RSA_PUBLIC_KEY` set from the user's key
+    (the public key is passed in at run time, never committed)
+  - no user network policy (Community Cloud egress IPs aren't fixed); check the account has
+    no account-level policy that would block it
+- [x] Confirm the masking policies' default branch masks for an unlisted role
+      (`FORGE_APP_ROLE`), and that `SP_METRICS_AS_*` / `SP_SAMPLE_AS_*` still diverge
+      correctly when called by it
+- [x] **Cost caps (`sql/05_app_access/02_cost_controls.sql`, limits chosen by the user 30 Sep):**
+      `FORGE_WH_MONITOR` 5 credits/day; `OPS.FORGE_APP_CORTEX_BUDGET` 25 credits/month of
+      `FORGE_APP_SVC` agent use, which calls `OPS.SP_STOP_PUBLIC_ASK` at 100% (Ask stops)
+- [ ] **User actions:** generate the key pair (openssl); create the Community Cloud app from
+      the public repo (`app/streamlit_app.py`); paste the secrets
+- [ ] **Gate:**
+  - every screen loads from the public URL in a private browser window
+  - the numbers equal art 05/09
+  - Ask returns an agent answer
+  - the data-health date shows
+  - a fallback to mock data fails the check
+  - query tags show the app's queries in `QUERY_HISTORY` under `FORGE_APP_SVC`
+
+If the trial fails, fall back to the SiS embed for external viewers (container runtime) and
+tell the user the same day.
+
 ---
 
 ## M4 — Conversational Layer
 
-### B10 — Cortex Agent + evaluation set (Day 2)
+### B10 — Cortex Agent + evaluation set (Day 2) ✅ done 2026-09-30, gate 6/6 (27/30 on C11; CR-007 proposed)
 Card `coco/B10_agent.md`. Absorbs old M6's edge-case and multilingual tests.
-- [ ] `agent/01_agent.sql`: `SEMANTIC.SUPPLY_CHAIN_AGENT`
+- [x] `agent/01_agent.sql`: `SEMANTIC.SUPPLY_CHAIN_AGENT`
   - tools:
     - `cortex_analyst_text_to_sql` on `SUPPLY_CHAIN_SV` (`FORGE_WH`, a timeout); the name
       search works through the view's dimensions
@@ -389,14 +427,14 @@ Card `coco/B10_agent.md`. Absorbs old M6's edge-case and multilingual tests.
     the time window; answer numbered parts in order
   - the §9 sample questions; a time and token budget; the model is chosen by the
     evaluation results
-- [ ] Grants: `USAGE` on the agent to `FORGE_ADMIN` and the persona roles. Agents use the
+- [x] Grants: `USAGE` on the agent to `FORGE_ADMIN` and the persona roles. Agents use the
       caller's **default** role and default warehouse (art 01); check which role applies
       when the app calls it.
-- [ ] **Run C11** (the evaluation set and runner) under the handoff lock, with Snowflake's
+- [x] **Run C11** (the evaluation set and runner) under the handoff lock, with Snowflake's
       agent evaluations if privileges allow; otherwise the `DATA_AGENT_RUN` runner
-- [ ] **Capture** art 07 (one complete, unmodified response) and art 08 (every evaluation
+- [x] **Capture** art 07 (one complete, unmodified response) and art 08 (every evaluation
       question: answer, SQL, pass/fail, latency)
-- [ ] **Gate**:
+- [x] **Gate**:
   - the 8 canonical answers match art 05
   - out-of-scope questions are refused; ambiguous ones get a clarifying question
   - the pass rate and latencies are recorded
@@ -408,22 +446,38 @@ Card `coco/B10_agent.md`. Absorbs old M6's edge-case and multilingual tests.
 
 ## M5 — Quality and Scale
 
-### B12 — Data-quality checks (Day 2)
+### B12 — Data-quality checks (Day 2) ✅ done 2026-09-30, gate 6/6 (77 DMFs live; self-checks 90/91)
 Card `coco/B12_dmfs.md`. Check Enterprise edition first. **Claude Code writes the SQL (C10,
 in `quality/`); CoCo runs it and wires it up.**
-- [ ] **Run C10** under the handoff lock:
+- [x] **Run C10** under the handoff lock:
   - system DMFs (nulls, duplicates, freshness, row count) and custom DMFs
     (`DMF_OVERSHIP_COUNT`, orphan lines, missing promised dates, negative on-hand, cost
     outliers), attached on `SOURCE` and `CONFORMED`, on a schedule
   - `SEMANTIC.SP_DATA_HEALTH` (the agent tool; B10 attaches it)
-- [ ] Grant `SNOWFLAKE.DATA_QUALITY_MONITORING_VIEWER` to `FORGE_ADMIN`; `USAGE` on
+- [x] Grant `SNOWFLAKE.DATA_QUALITY_MONITORING_VIEWER` to `FORGE_ADMIN`; `USAGE` on
       `SP_DATA_HEALTH` to the roles that call the agent
-- [ ] **Capture** art 10
-- [ ] **Gate**:
+- [x] **Capture** art 10
+- [x] **Gate**:
   - results land in `DATA_QUALITY_MONITORING_RESULTS`
   - `SOURCE` shows the injected defects at the spec rates; `CONFORMED` shows none of the
     repairable ones
   - `SP_DATA_HEALTH` returns the B8b shape for every entity
+
+### B12a — Freshness fixes: reference data + a nightly day-append (Day 3, user-approved 30 Sep)
+Card `coco/B12a_freshness.md` (write it when Claude Code's files land). Spec: DATA_SPEC §7.2
+"Status rules" and §7.1a. Claude Code writes the SQL (C10 add-on in `quality/`,
+`SP_APPEND_DAY` in `data_gen/`); CoCo runs it and schedules it.
+- [x] Run the new `SP_DATA_HEALTH` (reference entities → `REFERENCE`); re-capture art 10 (C16, 30 Sep: 93/93, ALL OK; `runs/C16_run.md`)
+- [ ] Run `SP_APPEND_DAY` on a clone, then live (catch-up from 30 Sep to today); self-checks
+- [ ] `sql/`: a serverless nightly task (05:30 UTC) calling `SP_APPEND_DAY(…, CURRENT_DATE())`,
+      suspended after repeated failures; re-runnable; in the B08m cutover replay
+- [ ] **Gate**:
+  - `SP_DATA_HEALTH('ALL')` reads OK the morning after a nightly run
+  - reference entities read `REFERENCE`
+  - `CONFORMED` refreshed incrementally (not a full refresh)
+  - the DMFs re-ran
+  - the nightly cost is measured
+  - persona equality still holds (art 09 query)
 
 ### B13 — Scale proof (Day 3)
 Card `coco/B13_scale_proof.md`. **Claude Code writes the harness (C12, in `tests/scale/`);
@@ -467,6 +521,13 @@ venv) as the contract check, then adds anything the tests don't cover:
       `CONTRACT.md` §11 with the user notified
 
 ### B15 — Production hardening + deploy (Day 3)
+**The submitted Prototype Deployed Link is the Streamlit Community Cloud app, live on the new
+account (ADR-009, trial in B15a).** At cutover: re-run
+`sql/05_app_access/01_app_service_user.sql` in the new account and switch the Community Cloud
+secrets. No code change is needed. Hard-suspend resource monitor on `FORGE_WH`, and check the
+per-session agent-question cap. Suspend everything after judging. The SiS deploy below is
+optional: an in-Snowflake copy, only if time is left.
+
 Card `coco/B15_deploy.md`. **Deploy with Claude Code's script (C07). Do NOT use the old PUT
 list in `docs/references/streamlit_in_snowflake.md` §7**: it missed `ui/` and `.streamlit/`.
 ```

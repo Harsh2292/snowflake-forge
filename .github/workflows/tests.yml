@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.11"  # same as app/environment.yml (SiS warehouse runtime)
+          python-version: "3.11"  # same as deploy/sis/environment.yml and the Community Cloud app
           cache: pip
           cache-dependency-path: |
             app/requirements.txt

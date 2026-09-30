@@ -16,7 +16,7 @@ that shows the error.
 import functools
 import json
 import sys
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -36,6 +36,60 @@ def pytest_collection_modifyitems(items):
     for item in items:
         if not (item.get_closest_marker("live") or item.get_closest_marker("ui")):
             item.add_marker(pytest.mark.mock)
+
+
+# ── The live audit's summary (C13): pass/fail per contract section ───────────
+# (test path prefix, contract section); the first matching prefix wins.
+CONTRACT_SECTIONS = [
+    ("tests/semantic/test_metric_ranges.py", "§3 metric ranges · §5.1 shape · §8 naive vs governed"),
+    ("tests/semantic/test_dimension_pairings.py", "§4 pairings · §5.2 shape"),
+    ("tests/semantic/test_semantic_objects.py", "§1/§3/§4 objects in the semantic view"),
+    ("tests/governance/test_masking.py", "§6 masking (§5.4 samples)"),
+    ("tests/governance/test_governed_columns.py", "§7 governed view columns"),
+    ("tests/consistency/", "§6 invariant: one number for every persona"),
+    ("tests/agent/", "§5.3 / §9 agent (CR-007)"),
+    ("tests/quality/", "DATA_SPEC §7.2 data health + DMFs"),
+]
+
+
+def live_summary(reports) -> list[str]:
+    """Lines for the live audit: per contract section, passed / failed / skipped, then each
+    failure with its first message line (which names the Snowflake object). `reports` are
+    pytest TestReports (nodeid, outcome, longrepr); only [live…] tests count."""
+    outcome = {}
+    for r in reports:
+        if "[live" not in r.nodeid:
+            continue
+        if r.outcome == "failed" or r.nodeid not in outcome:
+            outcome[r.nodeid] = r
+    if not any(r.outcome != "skipped" for r in outcome.values()):
+        return []  # nothing ran against Snowflake
+    table, failures = {}, []
+    for nodeid, r in outcome.items():
+        path = nodeid.replace("\\", "/")
+        section = next((s for prefix, s in CONTRACT_SECTIONS if path.startswith(prefix)), "other")
+        counts = table.setdefault(section, {"passed": 0, "failed": 0, "skipped": 0})
+        counts[r.outcome if r.outcome in counts else "failed"] += 1
+        if r.outcome == "failed":
+            message = getattr(r.longrepr, "reprcrash", None)
+            message = message.message if message else str(r.longrepr)
+            failures.append(f"  ✗ {nodeid}\n      {message.splitlines()[0][:200] if message else ''}")
+    order = [s for _, s in CONTRACT_SECTIONS] + ["other"]
+    lines = [f"{'Contract section':<52} passed  failed  skipped"]
+    for section in sorted(table, key=order.index):
+        c = table[section]
+        lines.append(f"{section:<52} {c['passed']:>6}  {c['failed']:>6}  {c['skipped']:>7}")
+    return lines + (["", "Failures (each names the object):", *failures] if failures else [])
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    reports = [r for key in ("passed", "failed", "skipped", "error")
+               for r in terminalreporter.stats.get(key, []) if hasattr(r, "nodeid")]
+    lines = live_summary(reports)
+    if lines:
+        terminalreporter.section("Live contract audit (C13)")
+        for line in lines:
+            terminalreporter.write_line(line)
 
 
 @functools.cache
@@ -106,7 +160,34 @@ class ReplaySession:
                 "PERSONA": persona.upper(),
                 **{col: _number(round(overall[col], 6)) for col in columns}}]
 
+    def add_agent(self, response: dict):
+        """art 07 (B10): every agent call gets this real response. The bound request is
+        recorded and must be the CR-007 JSON, or the call fails as Snowflake would."""
+        self.agent_response = response
+        self.agent_requests = []
+
+    def add_quality(self, payload: dict):
+        """art 10 (B12): SP_DATA_HEALTH('ALL' / 'shipments') and the latest DMF results,
+        typed as Snowpark returns them (VARIANT and ARRAY as JSON text, TIMESTAMP as datetime)."""
+        health = payload["data_health_all"]
+        self.health = {"ALL": health.get("FORGE_ADMIN", next(iter(health.values()))),
+                       "shipments": payload["data_health_shipments"]}
+        self.results[forge_data.QUALITY_SQL] = [{
+            "TABLE_SCHEMA": r["table_schema"], "TABLE_NAME": r["table_name"], "METRIC_NAME": r["metric_name"],
+            "ARGUMENT_NAMES": json.dumps(r["argument_names"], indent=2), "VALUE": json.dumps(r["value"]),
+            "MEASUREMENT_TIME": datetime.strptime(r["measurement_time"], "%Y-%m-%d %H:%M:%S.%f %z"),
+        } for r in payload["dmf_results_latest"]]
+
     def sql(self, sql, params=None):
+        if sql == forge_data.build_agent_sql() and getattr(self, "agent_response", None):
+            request = json.loads(params[0])  # a question bound on its own isn't JSON: fails here
+            assert request["messages"][0]["content"][0]["type"] == "text", request
+            self.agent_requests.append(params[0])
+            return _Captured([{"RESPONSE": json.dumps(self.agent_response)}])
+        if sql == forge_data.DATA_HEALTH_SQL and getattr(self, "health", None):
+            if params[0] not in self.health:
+                raise RuntimeError(f"SP_DATA_HEALTH({params[0]!r}) not captured in docs/artifacts")
+            return _Captured([{"SP_DATA_HEALTH": json.dumps(self.health[params[0]])}])
         if sql not in self.results:
             raise RuntimeError(f"not captured in docs/artifacts: {sql}")
         return _Captured(self.results[sql])
@@ -144,11 +225,21 @@ def _dimension(column: str, value):
 
 
 def replay_session() -> ReplaySession:
-    """Everything captured so far: art 04 (required) and art 05 (when present)."""
+    """Everything captured so far: art 04 (required), and art 05, 07 and 10 when present."""
+    def payload(name):
+        path = ARTIFACTS / name
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
     samples = load_artifact("04_persona_outputs.json")["payload"]
-    metrics_path = ARTIFACTS / "05_metric_values.json"
-    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))["payload"] if metrics_path.exists() else None
-    return ReplaySession(samples, metrics)
+    metrics = payload("05_metric_values.json")
+    session = ReplaySession(samples, metrics["payload"] if metrics else None)
+    agent = payload("07_agent_response.json")
+    if agent:
+        session.add_agent(agent.get("payload", agent))
+    quality = payload("10_dmf_results.json")
+    if quality:
+        session.add_quality(quality["payload"])
+    return session
 
 
 class Forge:

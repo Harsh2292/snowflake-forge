@@ -5,7 +5,8 @@ from these values, file a Change Request in CONTRACT.md §11. Do not edit them t
 reality.
 """
 
-# Flip to False once .agents/HANDOFF.md shows the handoff rows DONE (contract §10).
+# The default for local development and CI. forge_data.configure() switches to live when
+# the app runs in Snowflake or finds a Snowflake connection in Streamlit secrets (C15).
 USE_MOCK_DATA = True
 
 # ── §1 Fully qualified names ─────────────────────────────────────────────────
@@ -206,24 +207,62 @@ CANONICAL_QUESTIONS = [
 ]
 
 # ── §10 Mock mode ────────────────────────────────────────────────────────────
+# B09's re-captured art 05 (§3a windows; by region = plants.plant_region), rounded. The app's
+# saved data uses the full-precision capture in utils/captured.json (C6b).
 MOCK_METRICS = {
-    "on_time_delivery_rate": 0.8714,
-    "fill_rate": 0.9283,
-    "days_of_inventory": 28.4,
-    "avg_landed_cost": 412.67,
+    "on_time_delivery_rate": 0.8753,
+    "fill_rate": 0.9261,
+    "days_of_inventory": 36.4,
+    "avg_landed_cost": 604.84,
 }
 
 MOCK_BY_REGION = {
-    "APAC": {"on_time_delivery_rate": 0.8521, "fill_rate": 0.9147,
-             "days_of_inventory": 31.2, "avg_landed_cost": 487.20},
-    "EMEA": {"on_time_delivery_rate": 0.8893, "fill_rate": 0.9361,
-             "days_of_inventory": 26.8, "avg_landed_cost": 398.45},
-    "AMER": {"on_time_delivery_rate": 0.8742, "fill_rate": 0.9329,
-             "days_of_inventory": 27.1, "avg_landed_cost": 362.10},
+    "APAC": {"on_time_delivery_rate": 0.8677, "fill_rate": 0.9251,
+             "days_of_inventory": 36.1, "avg_landed_cost": 664.31},
+    "EMEA": {"on_time_delivery_rate": 0.8840, "fill_rate": 0.9261,
+             "days_of_inventory": 36.6, "avg_landed_cost": 589.48},
+    "AMER": {"on_time_delivery_rate": 0.8735, "fill_rate": 0.9270,
+             "days_of_inventory": 36.6, "avg_landed_cost": 568.18},
 }
 
 # ── App-side settings (not from the contract) ────────────────────────────────
 CONSISTENCY_DP = 6  # §6 invariant: metrics identical across roles to 6 decimal places
+
+# Public link on Streamlit Community Cloud (C15). Every value in ASK_LIMITS can be
+# overridden in the [forge] secrets section, so no commit is needed to tune them.
+ASK_LIMITS = {
+    "cooldown_seconds": 10,  # per visitor: gap between two agent calls
+    "per_session": 10,       # per visitor: agent calls per browser session
+    "concurrent": 3,         # all visitors: agent calls running at once
+    "per_hour": 30,          # all visitors: agent calls in any rolling hour
+    "per_day": 200,          # all visitors: agent calls per UTC day
+}
+ASK_MAX_CHARS = 500
+ANSWER_CACHE_SECONDS = {"canonical": 24 * 3600, "free_text": 3600}  # a cache hit costs nothing
+# When the Cortex budget revokes the app role's USAGE on the agent (CoCo, B15a), every agent
+# call fails with "does not exist or not authorized". Ask then says it's paused, and makes no
+# agent call for this long; the instant answers keep working.
+ASK_PAUSE_SECONDS = 600
+
+# ── Ask router (C14, C14b): instant answers for known metric questions ────────
+# `[forge] shortcut = false` in secrets turns it off. Its words come from the semantic view
+# itself (utils/vocabulary.json, built from semantic/01 by tests/tools/build_vocabulary.py);
+# only what the view doesn't say is kept here.
+ASK_SHORTCUT = True
+EXTRA_METRIC_PHRASES = {  # common phrasings that aren't view synonyms
+    "on_time_delivery_rate": ["on time", "on time performance", "on time rate"],
+    "days_of_inventory": ["inventory cover"],
+}
+# A word several dimensions share, resolved as the verified queries do: by region = the
+# plant's region, by quarter = year and quarter (semantic/01 rule 4).
+DIMENSION_TIEBREAK = {
+    "region": "plants.plant_region",
+    "quarter": "orders.order_year_quarter",
+}
+SCREEN_CACHE_SECONDS = 12 * 3600  # demo data is loaded once; shared by every visitor
+STATEMENT_TIMEOUT_SECONDS = 120   # no query or agent call runs on unbounded
+LOGIN_TIMEOUT_SECONDS = 20
+LOGIN_RETRY_SECONDS = 60          # after a failed login, fall back at once for this long
 
 # Format strings per contract §3 format (docs/references/plotly_streamlit.md §4).
 FORMATS = {

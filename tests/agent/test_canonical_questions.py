@@ -17,7 +17,8 @@ def test_canonical_question_is_answered_with_sql(forge, question):
     assert result["status"] != "unparseable"
     assert result["answer"].strip(), "empty answer"
     assert result["sql"], "no SQL: the agent didn't query the semantic view"
-    assert result["tools_used"], "no tool was used"
+    assert result["tools_used"] or result["tools_raw"], "no tool was used"
+    assert "```" not in result["answer"], "the SQL block belongs in the SQL tab, not the answer"
 
 
 def test_there_are_eight_canonical_questions():

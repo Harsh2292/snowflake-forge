@@ -1,7 +1,10 @@
-# Local development (pip). Streamlit in Snowflake reads environment.yml instead.
-# Keep the Streamlit pin identical in both files: 1.52.2 is the newest version the
-# SiS warehouse runtime supports (docs/references/streamlit_in_snowflake.md).
+# The app's pip dependencies: Streamlit Community Cloud (the public link) and local
+# development. It must stay the only dependency file in app/ (docs/references/community_cloud.md §1).
+# Streamlit in Snowflake reads deploy/sis/environment.yml instead; keep the Streamlit pin
+# identical in both: 1.52.2 is the newest the SiS warehouse runtime supports, and the page
+# CSS targets its data-testid names. Community Cloud: choose Python 3.11 when deploying.
 streamlit==1.52.2
 pandas>=2.1
-snowflake-snowpark-python>=1.11.0
+snowflake-snowpark-python>=1.24.0  # thread-safe sessions: Ask runs agent parts in parallel (C14)
 snowflake-connector-python>=3.6.0
+cryptography>=41  # reads the PEM private key from secrets (key-pair auth)

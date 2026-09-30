@@ -17,6 +17,13 @@ function miniChart(chart) {
   </div>`;
 }
 
+/* The agent writes light markdown: paragraphs, line breaks and **bold**. Escape first, then
+   turn only those into HTML (anything else stays plain text). */
+function prose(text) {
+  return text.split(/\n{2,}/).map((p) => `<p style="margin:0 0 10px;font-size:17px;line-height:1.6">${
+    esc(p).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</p>`).join('');
+}
+
 function render(s) {
   const tabs = [['answer', 'Answer'], ['sql', 'SQL'], ['definition', 'Definition'], ['raw', 'Raw response']]
     .filter(([id]) => (id !== 'sql' || D.sql) && (id !== 'definition' || D.definitions.length));
@@ -28,19 +35,22 @@ function render(s) {
       <span style="font-size:15px;font-weight:600;color:var(--blue)">${esc(d.formula)}</span><span class="small ink2" style="line-height:1.55">${esc(d.definition)}</span>
       <span class="small muted">${esc(d.id)} in ${esc(D.semantic_view)}</span></div>`).join('<hr class="rule" style="margin:14px 0">');
   else if (s.tab === 'raw') body = `<pre class="well" style="margin:0;overflow:auto;max-height:230px;font-size:12px;line-height:1.5">${esc(D.raw)}</pre>`;
-  else body = `<p style="margin:0;font-size:17px;line-height:1.6">${esc(D.answer)}</p>${miniChart(D.chart)}
+  else body = `${prose(D.answer)}${D.health ? `<div class="well small mt16">${icon('info', 16)} ${esc(D.health)}</div>` : ''}${miniChart(D.chart)}
       ${D.warnings.map((w) => `<div class="well small mt16">${icon('info', 16)} ${esc(w)}</div>`).join('')}`;
 
   return `<div class="root stack gap12" style="padding:4px 16px 26px">
-    <div class="row end"><span style="background:var(--sel);padding:12px 18px;border-radius:18px 18px 4px 18px;font-size:16px;max-width:80%">${esc(D.question)}</span></div>
-    <article class="card stack gap16" style="border-radius:20px">
+    ${D.question ? `<div class="row end"><span style="background:var(--sel);padding:12px 18px;border-radius:18px 18px 4px 18px;font-size:16px;max-width:80%">${esc(D.question)}</span></div>` : ''}
+    <article class="card stack gap16" style="border-radius:20px" data-route="${D.instant ? 'instant' : 'agent'}">
+      ${D.part ? `<span class="small ink2" data-part="1">${esc(D.part)}</span>` : ''}
       <div class="row between gap12" style="flex-wrap:wrap">
         <span class="row gap12"><span class="avatar" style="width:36px;height:36px;font-size:13px">SC</span>
-          <span style="font-weight:600">Supply Chain Agent</span></span>
+          <span style="font-weight:600">${esc(D.via)}</span>
+          ${D.elapsed ? `<span class="small muted num" title="Time to answer">${esc(D.elapsed)}</span>` : ''}</span>
         <span class="row gap8" style="flex-wrap:wrap">
           ${D.metrics.map((m) => `<span class="chip" style="padding:4px 10px;font-size:13px">${esc(m)}</span>`).join('')}
           ${D.verified ? `<span class="chip" style="padding:4px 10px;font-size:13px">${icon('tick', 13, 'currentColor', 2.4)}Verified query</span>` : ''}
-          ${D.practice ? `<span class="chip off" style="padding:4px 10px;font-size:13px">Practice answer</span>` : ''}
+          ${(D.tools || []).map((t) => `<span class="chip" style="padding:4px 10px;font-size:13px">${esc(t)}</span>`).join('')}
+          ${D.practice ? `<span class="chip off" style="padding:4px 10px;font-size:13px">Saved answer</span>` : ''}
         </span>
       </div>
       <div class="row gap8" role="tablist" aria-label="Answer details">${tabBar}</div>

@@ -1,0 +1,1446 @@
+{
+  "build_step": "B08m (event account; replayed from the repo)",
+  "captured_at": "2026-09-30T18:51:20Z",
+  "captured_by": "CoCo",
+  "source": "C10 (quality/) + C16, replayed at B08m; run reports docs/artifacts/runs/C16_run.md and B08m_run.md",
+  "queries": {
+    "dmf_results": "SELECT table_schema, table_name, metric_schema, metric_name, argument_names, value, measurement_time FROM SNOWFLAKE.LOCAL.DATA_QUALITY_MONITORING_RESULTS WHERE table_database = 'SUPPLY_CHAIN_FORGE' QUALIFY ROW_NUMBER() OVER (PARTITION BY reference_id ORDER BY measurement_time DESC) = 1",
+    "data_health_all": "CALL SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH('ALL') -- as FORGE_ADMIN, PLANNER_ROLE, BUYER_ROLE, LOGISTICS_ROLE",
+    "data_health_shipments": "CALL SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH('shipments') -- as FORGE_ADMIN"
+  },
+  "schedule": "TRIGGER_ON_CHANGES on all 21 tables (no CRON fallback needed); 77 DMF associations",
+  "self_checks": {
+    "rows": 93,
+    "passed": 93,
+    "failed": []
+  },
+  "data_health_all_identical_across_roles": true,
+  "payload": {
+    "dmf_results_latest": [
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:13.706 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "CODE_MAP",
+        "table_schema": "CONFORMED",
+        "value": 80
+      },
+      {
+        "argument_names": [
+          "CUSTOMER_SEGMENT"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.353 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "CUSTOMER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "REGION"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.484 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "CUSTOMER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "CUSTOMER_ID",
+          "CUSTOMER_NAME"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.349 -0700",
+        "metric_name": "DMF_TEST_RECORD_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "CUSTOMER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "CUSTOMER_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.571 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "CUSTOMER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.597 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "CUSTOMER",
+        "table_schema": "CONFORMED",
+        "value": 2000
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.095 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "FX_RATE",
+        "table_schema": "CONFORMED",
+        "value": 152
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:13.687 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "FX_RATE",
+        "table_schema": "CONFORMED",
+        "value": 54790
+      },
+      {
+        "argument_names": [
+          "QUANTITY_ON_HAND"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.514 -0700",
+        "metric_name": "DMF_NEGATIVE_ON_HAND_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "INVENTORY",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "INVENTORY_KEY"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.879 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "INVENTORY",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.151 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "INVENTORY",
+        "table_schema": "CONFORMED",
+        "value": 165
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.968 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "INVENTORY",
+        "table_schema": "CONFORMED",
+        "value": 2156400
+      },
+      {
+        "argument_names": [
+          "ORDER_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.774 -0700",
+        "metric_name": "DMF_ORPHAN_ORDER_LINES",
+        "metric_schema": "OPS",
+        "table_name": "ORDER_LINE",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "QUANTITY_ORDERED",
+          "QUANTITY_SHIPPED"
+        ],
+        "measurement_time": "2026-09-30 11:40:09.946 -0700",
+        "metric_name": "DMF_OVERSHIP_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "ORDER_LINE",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "LINE_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.551 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "ORDER_LINE",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.705 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "ORDER_LINE",
+        "table_schema": "CONFORMED",
+        "value": 154
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.581 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "ORDER_LINE",
+        "table_schema": "CONFORMED",
+        "value": 2000369
+      },
+      {
+        "argument_names": [
+          "CATEGORY"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.741 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "PART",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "PART_ID",
+          "PART_NAME"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.483 -0700",
+        "metric_name": "DMF_TEST_RECORD_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "PART",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:13.671 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "PART",
+        "table_schema": "CONFORMED",
+        "value": 1200
+      },
+      {
+        "argument_names": [
+          "REGION"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.481 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "PLANT",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.095 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "PLANT",
+        "table_schema": "CONFORMED",
+        "value": 12
+      },
+      {
+        "argument_names": [
+          "ORDER_PRIORITY"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.751 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "SALES_ORDER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "ORDER_STATUS"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.778 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "SALES_ORDER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "ORDER_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.477 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SALES_ORDER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.533 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "SALES_ORDER",
+        "table_schema": "CONFORMED",
+        "value": 152
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.878 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SALES_ORDER",
+        "table_schema": "CONFORMED",
+        "value": 638198
+      },
+      {
+        "argument_names": [
+          "DQ_FLAGS"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.573 -0700",
+        "metric_name": "DMF_COST_OUTLIER_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 690
+      },
+      {
+        "argument_names": [
+          "CARRIER"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.550 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "SHIPMENT_STATUS"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.463 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "ORDER_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:09.846 -0700",
+        "metric_name": "DMF_ORPHAN_SHIPMENTS",
+        "metric_schema": "OPS",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "SHIPMENT_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.489 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.610 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 149
+      },
+      {
+        "argument_names": [
+          "PROMISED_DELIVERY_DATE"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.489 -0700",
+        "metric_name": "NULL_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 5539
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.663 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SHIPMENT",
+        "table_schema": "CONFORMED",
+        "value": 693241
+      },
+      {
+        "argument_names": [
+          "SOURCE_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.478 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SOURCING",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.954 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SOURCING",
+        "table_schema": "CONFORMED",
+        "value": 2501
+      },
+      {
+        "argument_names": [
+          "REGION"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.771 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "SUPPLIER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [
+          "SUPPLIER_ID",
+          "SUPPLIER_NAME"
+        ],
+        "measurement_time": "2026-09-30 11:40:09.924 -0700",
+        "metric_name": "DMF_TEST_RECORD_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "SUPPLIER",
+        "table_schema": "CONFORMED",
+        "value": 0
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.253 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SUPPLIER",
+        "table_schema": "CONFORMED",
+        "value": 150
+      },
+      {
+        "argument_names": [
+          "KTOKD"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.451 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "KNA1",
+        "table_schema": "ERP_SOURCE",
+        "value": 60
+      },
+      {
+        "argument_names": [
+          "REGIO"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.437 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "KNA1",
+        "table_schema": "ERP_SOURCE",
+        "value": 162
+      },
+      {
+        "argument_names": [
+          "KUNNR",
+          "NAME1"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.822 -0700",
+        "metric_name": "DMF_TEST_RECORD_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "KNA1",
+        "table_schema": "ERP_SOURCE",
+        "value": 5
+      },
+      {
+        "argument_names": [
+          "KUNNR"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.437 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "KNA1",
+        "table_schema": "ERP_SOURCE",
+        "value": 20
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.129 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "KNA1",
+        "table_schema": "ERP_SOURCE",
+        "value": 2025
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.483 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "TCURR",
+        "table_schema": "ERP_SOURCE",
+        "value": 1179
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.677 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "TCURR",
+        "table_schema": "ERP_SOURCE",
+        "value": 23310
+      },
+      {
+        "argument_names": [
+          "GBSTK"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.479 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "VBAK",
+        "table_schema": "ERP_SOURCE",
+        "value": 21745
+      },
+      {
+        "argument_names": [
+          "PRIO"
+        ],
+        "measurement_time": "2026-09-30 11:40:09.851 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "VBAK",
+        "table_schema": "ERP_SOURCE",
+        "value": 14512
+      },
+      {
+        "argument_names": [
+          "VBELN"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.920 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "VBAK",
+        "table_schema": "ERP_SOURCE",
+        "value": 73729
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.123 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "VBAK",
+        "table_schema": "ERP_SOURCE",
+        "value": 233
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.114 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "VBAK",
+        "table_schema": "ERP_SOURCE",
+        "value": 724949
+      },
+      {
+        "argument_names": [
+          "VBELN"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.641 -0700",
+        "metric_name": "DMF_ORPHAN_ORDER_LINES",
+        "metric_schema": "OPS",
+        "table_name": "VBAP",
+        "table_schema": "ERP_SOURCE",
+        "value": 4149
+      },
+      {
+        "argument_names": [
+          "KWMENG",
+          "QTY_SHIPPED"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.621 -0700",
+        "metric_name": "DMF_OVERSHIP_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "VBAP",
+        "table_schema": "ERP_SOURCE",
+        "value": 19390
+      },
+      {
+        "argument_names": [
+          "LINE_ID"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.193 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "VBAP",
+        "table_schema": "ERP_SOURCE",
+        "value": 30511
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.253 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "VBAP",
+        "table_schema": "ERP_SOURCE",
+        "value": 232
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.123 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "VBAP",
+        "table_schema": "ERP_SOURCE",
+        "value": 2074071
+      },
+      {
+        "argument_names": [
+          "REGIO"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.542 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "LFA1",
+        "table_schema": "SRM_SOURCE",
+        "value": 12
+      },
+      {
+        "argument_names": [
+          "LIFNR",
+          "NAME1"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.522 -0700",
+        "metric_name": "DMF_TEST_RECORD_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "LFA1",
+        "table_schema": "SRM_SOURCE",
+        "value": 2
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.206 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "LFA1",
+        "table_schema": "SRM_SOURCE",
+        "value": 152
+      },
+      {
+        "argument_names": [
+          "MATKL"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.817 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "MARA",
+        "table_schema": "SRM_SOURCE",
+        "value": 60
+      },
+      {
+        "argument_names": [
+          "MATNR",
+          "MAKTX"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.767 -0700",
+        "metric_name": "DMF_TEST_RECORD_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "MARA",
+        "table_schema": "SRM_SOURCE",
+        "value": 4
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.535 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "MARA",
+        "table_schema": "SRM_SOURCE",
+        "value": 1204
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:13.727 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "SOURCING",
+        "table_schema": "SRM_SOURCE",
+        "value": 2503
+      },
+      {
+        "argument_names": [
+          "CARRIER_CD"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.307 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "VTTK",
+        "table_schema": "TMS_SOURCE",
+        "value": 46865
+      },
+      {
+        "argument_names": [
+          "SHP_STATUS"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.020 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "VTTK",
+        "table_schema": "TMS_SOURCE",
+        "value": 23393
+      },
+      {
+        "argument_names": [
+          "VBELN"
+        ],
+        "measurement_time": "2026-09-30 11:40:11.601 -0700",
+        "metric_name": "DMF_ORPHAN_SHIPMENTS",
+        "metric_schema": "OPS",
+        "table_name": "VTTK",
+        "table_schema": "TMS_SOURCE",
+        "value": 1547
+      },
+      {
+        "argument_names": [
+          "TKNUM"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.899 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "VTTK",
+        "table_schema": "TMS_SOURCE",
+        "value": 75473
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.935 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "VTTK",
+        "table_schema": "TMS_SOURCE",
+        "value": 232
+      },
+      {
+        "argument_names": [
+          "PROM_DLV_DT"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.089 -0700",
+        "metric_name": "NULL_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "VTTK",
+        "table_schema": "TMS_SOURCE",
+        "value": 6212
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:11.677 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "VTTK",
+        "table_schema": "TMS_SOURCE",
+        "value": 780439
+      },
+      {
+        "argument_names": [
+          "LABST"
+        ],
+        "measurement_time": "2026-09-30 11:40:13.509 -0700",
+        "metric_name": "DMF_NEGATIVE_ON_HAND_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "MARD",
+        "table_schema": "WMS_SOURCE",
+        "value": 6500
+      },
+      {
+        "argument_names": [
+          "INV_KEY"
+        ],
+        "measurement_time": "2026-09-30 11:40:10.125 -0700",
+        "metric_name": "DUPLICATE_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "MARD",
+        "table_schema": "WMS_SOURCE",
+        "value": 10692
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.819 -0700",
+        "metric_name": "FRESHNESS",
+        "metric_schema": "CORE",
+        "table_name": "MARD",
+        "table_schema": "WMS_SOURCE",
+        "value": 230
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.457 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "MARD",
+        "table_schema": "WMS_SOURCE",
+        "value": 2167092
+      },
+      {
+        "argument_names": [
+          "REGION_CD"
+        ],
+        "measurement_time": "2026-09-30 11:40:09.812 -0700",
+        "metric_name": "DMF_NONCONTRACT_CODE_COUNT",
+        "metric_schema": "OPS",
+        "table_name": "T001W",
+        "table_schema": "WMS_SOURCE",
+        "value": 2
+      },
+      {
+        "argument_names": [],
+        "measurement_time": "2026-09-30 11:40:10.222 -0700",
+        "metric_name": "ROW_COUNT",
+        "metric_schema": "CORE",
+        "table_name": "T001W",
+        "table_schema": "WMS_SOURCE",
+        "value": 12
+      }
+    ],
+    "data_health_all": {
+      "FORGE_ADMIN": {
+        "as_of_date": "2026-09-29",
+        "entities": [
+          {
+            "checks": [],
+            "entity": "suppliers",
+            "freshness_hours": 7190,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2025-12-05T04:42:00",
+            "row_count": 150,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SUPPLIER"
+          },
+          {
+            "checks": [],
+            "entity": "parts",
+            "freshness_hours": 87637.7,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T05:00:00",
+            "row_count": 1200,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PART"
+          },
+          {
+            "checks": [],
+            "entity": "sourcing",
+            "freshness_hours": 7190.2,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": "2025-12-04",
+            "latest_load_ts": "2025-12-05T04:28:00",
+            "row_count": 2501,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SOURCING"
+          },
+          {
+            "checks": [],
+            "entity": "plants",
+            "freshness_hours": 87638.1,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T04:35:00",
+            "row_count": 12,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PLANT"
+          },
+          {
+            "checks": [],
+            "entity": "inventory",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2156400,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.INVENTORY"
+          },
+          {
+            "checks": [],
+            "entity": "customers",
+            "freshness_hours": 758.9,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-08-30T03:46:00",
+            "row_count": 2000,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.CUSTOMER"
+          },
+          {
+            "checks": [],
+            "entity": "orders",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 638198,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SALES_ORDER"
+          },
+          {
+            "checks": [],
+            "entity": "order_lines",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2000369,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.ORDER_LINE"
+          },
+          {
+            "checks": [],
+            "entity": "shipments",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T04:59:00",
+            "row_count": 693241,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT"
+          }
+        ],
+        "entity": "ALL",
+        "generated_at": "2026-09-30T18:42:50Z",
+        "status": "OK",
+        "summary": "Data is as of 2026-09-29. 9 of 9 entities OK. 5 reference tables change rarely and are not judged on age. Only the checks that are not OK are listed; ask for one entity to see all of its checks."
+      },
+      "PLANNER_ROLE": {
+        "as_of_date": "2026-09-29",
+        "entities": [
+          {
+            "checks": [],
+            "entity": "suppliers",
+            "freshness_hours": 7190,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2025-12-05T04:42:00",
+            "row_count": 150,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SUPPLIER"
+          },
+          {
+            "checks": [],
+            "entity": "parts",
+            "freshness_hours": 87637.7,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T05:00:00",
+            "row_count": 1200,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PART"
+          },
+          {
+            "checks": [],
+            "entity": "sourcing",
+            "freshness_hours": 7190.2,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": "2025-12-04",
+            "latest_load_ts": "2025-12-05T04:28:00",
+            "row_count": 2501,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SOURCING"
+          },
+          {
+            "checks": [],
+            "entity": "plants",
+            "freshness_hours": 87638.1,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T04:35:00",
+            "row_count": 12,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PLANT"
+          },
+          {
+            "checks": [],
+            "entity": "inventory",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2156400,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.INVENTORY"
+          },
+          {
+            "checks": [],
+            "entity": "customers",
+            "freshness_hours": 758.9,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-08-30T03:46:00",
+            "row_count": 2000,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.CUSTOMER"
+          },
+          {
+            "checks": [],
+            "entity": "orders",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 638198,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SALES_ORDER"
+          },
+          {
+            "checks": [],
+            "entity": "order_lines",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2000369,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.ORDER_LINE"
+          },
+          {
+            "checks": [],
+            "entity": "shipments",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T04:59:00",
+            "row_count": 693241,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT"
+          }
+        ],
+        "entity": "ALL",
+        "generated_at": "2026-09-30T18:42:52Z",
+        "status": "OK",
+        "summary": "Data is as of 2026-09-29. 9 of 9 entities OK. 5 reference tables change rarely and are not judged on age. Only the checks that are not OK are listed; ask for one entity to see all of its checks."
+      },
+      "BUYER_ROLE": {
+        "as_of_date": "2026-09-29",
+        "entities": [
+          {
+            "checks": [],
+            "entity": "suppliers",
+            "freshness_hours": 7190,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2025-12-05T04:42:00",
+            "row_count": 150,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SUPPLIER"
+          },
+          {
+            "checks": [],
+            "entity": "parts",
+            "freshness_hours": 87637.7,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T05:00:00",
+            "row_count": 1200,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PART"
+          },
+          {
+            "checks": [],
+            "entity": "sourcing",
+            "freshness_hours": 7190.2,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": "2025-12-04",
+            "latest_load_ts": "2025-12-05T04:28:00",
+            "row_count": 2501,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SOURCING"
+          },
+          {
+            "checks": [],
+            "entity": "plants",
+            "freshness_hours": 87638.1,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T04:35:00",
+            "row_count": 12,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PLANT"
+          },
+          {
+            "checks": [],
+            "entity": "inventory",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2156400,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.INVENTORY"
+          },
+          {
+            "checks": [],
+            "entity": "customers",
+            "freshness_hours": 758.9,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-08-30T03:46:00",
+            "row_count": 2000,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.CUSTOMER"
+          },
+          {
+            "checks": [],
+            "entity": "orders",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 638198,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SALES_ORDER"
+          },
+          {
+            "checks": [],
+            "entity": "order_lines",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2000369,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.ORDER_LINE"
+          },
+          {
+            "checks": [],
+            "entity": "shipments",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T04:59:00",
+            "row_count": 693241,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT"
+          }
+        ],
+        "entity": "ALL",
+        "generated_at": "2026-09-30T18:42:55Z",
+        "status": "OK",
+        "summary": "Data is as of 2026-09-29. 9 of 9 entities OK. 5 reference tables change rarely and are not judged on age. Only the checks that are not OK are listed; ask for one entity to see all of its checks."
+      },
+      "LOGISTICS_ROLE": {
+        "as_of_date": "2026-09-29",
+        "entities": [
+          {
+            "checks": [],
+            "entity": "suppliers",
+            "freshness_hours": 7190,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2025-12-05T04:42:00",
+            "row_count": 150,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SUPPLIER"
+          },
+          {
+            "checks": [],
+            "entity": "parts",
+            "freshness_hours": 87637.7,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T05:00:00",
+            "row_count": 1200,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PART"
+          },
+          {
+            "checks": [],
+            "entity": "sourcing",
+            "freshness_hours": 7190.2,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": "2025-12-04",
+            "latest_load_ts": "2025-12-05T04:28:00",
+            "row_count": 2501,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SOURCING"
+          },
+          {
+            "checks": [],
+            "entity": "plants",
+            "freshness_hours": 87638.1,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2016-10-01T04:35:00",
+            "row_count": 12,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.PLANT"
+          },
+          {
+            "checks": [],
+            "entity": "inventory",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2156400,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.INVENTORY"
+          },
+          {
+            "checks": [],
+            "entity": "customers",
+            "freshness_hours": 758.9,
+            "freshness_status": "REFERENCE",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-08-30T03:46:00",
+            "row_count": 2000,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.CUSTOMER"
+          },
+          {
+            "checks": [],
+            "entity": "orders",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 638198,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SALES_ORDER"
+          },
+          {
+            "checks": [],
+            "entity": "order_lines",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": null,
+            "latest_load_ts": "2026-09-30T05:00:00",
+            "row_count": 2000369,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.ORDER_LINE"
+          },
+          {
+            "checks": [],
+            "entity": "shipments",
+            "freshness_hours": 13.7,
+            "freshness_status": "OK",
+            "latest_business_date": "2026-09-29",
+            "latest_load_ts": "2026-09-30T04:59:00",
+            "row_count": 693241,
+            "status": "OK",
+            "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT"
+          }
+        ],
+        "entity": "ALL",
+        "generated_at": "2026-09-30T18:42:58Z",
+        "status": "OK",
+        "summary": "Data is as of 2026-09-29. 9 of 9 entities OK. 5 reference tables change rarely and are not judged on age. Only the checks that are not OK are listed; ask for one entity to see all of its checks."
+      }
+    },
+    "data_health_shipments": {
+      "as_of_date": "2026-09-29",
+      "entities": [
+        {
+          "checks": [
+            {
+              "check": "duplicate_keys",
+              "code": "M01/M02",
+              "columns": [
+                "TKNUM"
+              ],
+              "dmf": "SNOWFLAKE.CORE.DUPLICATE_COUNT",
+              "handled_by": "One row per key: the latest load wins",
+              "layer": "SOURCE",
+              "measured_at": "2026-09-30T18:40:10Z",
+              "rate": 0.096706,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK",
+              "threshold_rate": null,
+              "value": 75473
+            },
+            {
+              "check": "noncontract_carrier",
+              "code": "M03",
+              "columns": [
+                "CARRIER_CD"
+              ],
+              "dmf": "SUPPLY_CHAIN_FORGE.OPS.DMF_NONCONTRACT_CODE_COUNT",
+              "handled_by": "Mapped to the canonical carrier codes",
+              "layer": "SOURCE",
+              "measured_at": "2026-09-30T18:40:10Z",
+              "rate": 0.06005,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK",
+              "threshold_rate": null,
+              "value": 46865
+            },
+            {
+              "check": "noncontract_shipment_status",
+              "code": "M03",
+              "columns": [
+                "SHP_STATUS"
+              ],
+              "dmf": "SUPPLY_CHAIN_FORGE.OPS.DMF_NONCONTRACT_CODE_COUNT",
+              "handled_by": "Mapped to IN_TRANSIT, DELIVERED or DELAYED",
+              "layer": "SOURCE",
+              "measured_at": "2026-09-30T18:40:10Z",
+              "rate": 0.029974,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK",
+              "threshold_rate": null,
+              "value": 23393
+            },
+            {
+              "check": "missing_promised_date",
+              "code": "E01",
+              "columns": [
+                "PROM_DLV_DT"
+              ],
+              "dmf": "SNOWFLAKE.CORE.NULL_COUNT",
+              "handled_by": "Excluded from on-time delivery",
+              "layer": "SOURCE",
+              "measured_at": "2026-09-30T18:40:10Z",
+              "rate": 0.00796,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK",
+              "threshold_rate": 0.016,
+              "value": 6212
+            },
+            {
+              "check": "orphan_shipments",
+              "code": "E09b",
+              "columns": [
+                "VBELN"
+              ],
+              "dmf": "SUPPLY_CHAIN_FORGE.OPS.DMF_ORPHAN_SHIPMENTS",
+              "handled_by": "Dropped: no matching order",
+              "layer": "SOURCE",
+              "measured_at": "2026-09-30T18:40:11Z",
+              "rate": 0.001982,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.TMS_SOURCE.VTTK",
+              "threshold_rate": 0.004,
+              "value": 1547
+            },
+            {
+              "check": "duplicate_keys",
+              "code": "M01/M02",
+              "columns": [
+                "shipment_id"
+              ],
+              "dmf": "SNOWFLAKE.CORE.DUPLICATE_COUNT",
+              "handled_by": "One row per key: the latest load wins",
+              "layer": "CONFORMED",
+              "measured_at": "2026-09-30T18:40:11Z",
+              "rate": 0.0,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT",
+              "threshold_rate": null,
+              "value": 0
+            },
+            {
+              "check": "noncontract_carrier",
+              "code": "M03",
+              "columns": [
+                "carrier"
+              ],
+              "dmf": "SUPPLY_CHAIN_FORGE.OPS.DMF_NONCONTRACT_CODE_COUNT",
+              "handled_by": "Mapped to the canonical carrier codes",
+              "layer": "CONFORMED",
+              "measured_at": "2026-09-30T18:40:11Z",
+              "rate": 0.0,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT",
+              "threshold_rate": null,
+              "value": 0
+            },
+            {
+              "check": "noncontract_shipment_status",
+              "code": "M03",
+              "columns": [
+                "shipment_status"
+              ],
+              "dmf": "SUPPLY_CHAIN_FORGE.OPS.DMF_NONCONTRACT_CODE_COUNT",
+              "handled_by": "Mapped to IN_TRANSIT, DELIVERED or DELAYED",
+              "layer": "CONFORMED",
+              "measured_at": "2026-09-30T18:40:13Z",
+              "rate": 0.0,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT",
+              "threshold_rate": null,
+              "value": 0
+            },
+            {
+              "check": "missing_promised_date",
+              "code": "E01",
+              "columns": [
+                "promised_delivery_date"
+              ],
+              "dmf": "SNOWFLAKE.CORE.NULL_COUNT",
+              "handled_by": "Excluded from on-time delivery",
+              "layer": "CONFORMED",
+              "measured_at": "2026-09-30T18:40:11Z",
+              "rate": 0.00799,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT",
+              "threshold_rate": 0.016,
+              "value": 5539
+            },
+            {
+              "check": "orphan_shipments",
+              "code": "E09b",
+              "columns": [
+                "order_id"
+              ],
+              "dmf": "SUPPLY_CHAIN_FORGE.OPS.DMF_ORPHAN_SHIPMENTS",
+              "handled_by": "Dropped: no matching order",
+              "layer": "CONFORMED",
+              "measured_at": "2026-09-30T18:40:09Z",
+              "rate": 0.0,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT",
+              "threshold_rate": null,
+              "value": 0
+            },
+            {
+              "check": "cost_outliers",
+              "code": "E08",
+              "columns": [
+                "dq_flags"
+              ],
+              "dmf": "SUPPLY_CHAIN_FORGE.OPS.DMF_COST_OUTLIER_COUNT",
+              "handled_by": "Costs set to unknown: excluded from average landed cost",
+              "layer": "CONFORMED",
+              "measured_at": "2026-09-30T18:40:10Z",
+              "rate": 0.000995,
+              "status": "OK",
+              "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT",
+              "threshold_rate": 0.002,
+              "value": 690
+            }
+          ],
+          "entity": "shipments",
+          "freshness_hours": 13.9,
+          "freshness_status": "OK",
+          "latest_business_date": "2026-09-29",
+          "latest_load_ts": "2026-09-30T04:59:00",
+          "row_count": 693241,
+          "status": "OK",
+          "table": "SUPPLY_CHAIN_FORGE.CONFORMED.SHIPMENT"
+        }
+      ],
+      "entity": "shipments",
+      "generated_at": "2026-09-30T18:51:21Z",
+      "status": "OK",
+      "summary": "Shipments are fresh (loaded 14 h ago). 3 edge cases handled; no repairable defects left."
+    }
+  }
+}

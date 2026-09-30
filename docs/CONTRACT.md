@@ -9,7 +9,11 @@
 > CoCo implements the Snowflake side to match this exactly.
 > Claude Code implements the app side to match this exactly.
 >
-> **Version**: 1.5 · **Frozen**: 2026-09-29 (v1.4: 2026-09-27)
+> **Version**: 1.6 · **Frozen**: 2026-09-30 (v1.5: 2026-09-29)
+>
+> **v1.6 change** (accepted by the user 2026-09-30):
+> - **CR-007**: §5.3, the agent call binds the whole request JSON as the single `?`
+>   (`DATA_AGENT_RUN` needs a constant request). Nothing else changes.
 >
 > **v1.5 change** (accepted by the user 2026-09-29):
 > - **CR-006**: realistic data v2. It adds the new §3 definition strings with edge-case rules
@@ -247,17 +251,25 @@ Returns: one row per region. Columns `PLANT_REGION`, `ON_TIME_DELIVERY_RATE`.
 
 ### 5.3 Agent invocation
 
+From v1.6 (CR-007): the caller builds the whole request as JSON text and binds it as the one
+`?`. `DATA_AGENT_RUN` needs its request to be a constant, so building it inside the call
+(`OBJECT_CONSTRUCT(…)::VARCHAR`) is rejected at compile time.
+
 ```sql
 SELECT TRY_PARSE_JSON(
   SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
     'SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_AGENT',
-    OBJECT_CONSTRUCT('messages', ARRAY_CONSTRUCT(
-      OBJECT_CONSTRUCT('role', 'user', 'content',
-        ARRAY_CONSTRUCT(OBJECT_CONSTRUCT('type', 'text', 'text', ?)))))::VARCHAR,
+    ?,          -- the whole request as JSON text, built by the caller
     TRUE
   )
 ) AS response;
 ```
+
+The bound value:
+`{"messages": [{"role": "user", "content": [{"type": "text", "text": "<question>"}]}]}`.
+Build it with `json.dumps(...)` in Python, which escapes the question. In Snowflake
+Scripting, build it first with `req := (SELECT TO_JSON(OBJECT_CONSTRUCT(…, :question …)));`,
+then pass `:req`. The response shape is unchanged (art 07).
 
 ### 5.4 Persona sample data & metric procedures — call a procedure, do NOT use `USE ROLE`
 
@@ -458,24 +470,24 @@ USE_MOCK_DATA = True   # flip to False when HANDOFF.md shows all items DONE
 ```
 
 Mock values must sit inside the ranges in §3 so the UI looks correct while offline.
-Under CR-006 the practice values below are replaced by the values in the re-captured art 05
-(B09), within v1.5:
+Under CR-006 the practice values were replaced at B09 by the re-captured art 05 (§3a windows;
+by region = `plants.plant_region`), within v1.5:
 
 ```python
 MOCK_METRICS = {
-    "on_time_delivery_rate": 0.8714,
-    "fill_rate": 0.9283,
-    "days_of_inventory": 28.4,
-    "avg_landed_cost": 412.67,
+    "on_time_delivery_rate": 0.8753,
+    "fill_rate": 0.9261,
+    "days_of_inventory": 36.4,
+    "avg_landed_cost": 604.84,
 }
 
 MOCK_BY_REGION = {
-    "APAC": {"on_time_delivery_rate": 0.8521, "fill_rate": 0.9147,
-             "days_of_inventory": 31.2, "avg_landed_cost": 487.20},
-    "EMEA": {"on_time_delivery_rate": 0.8893, "fill_rate": 0.9361,
-             "days_of_inventory": 26.8, "avg_landed_cost": 398.45},
-    "AMER": {"on_time_delivery_rate": 0.8742, "fill_rate": 0.9329,
-             "days_of_inventory": 27.1, "avg_landed_cost": 362.10},
+    "APAC": {"on_time_delivery_rate": 0.8677, "fill_rate": 0.9251,
+             "days_of_inventory": 36.1, "avg_landed_cost": 664.31},
+    "EMEA": {"on_time_delivery_rate": 0.8840, "fill_rate": 0.9261,
+             "days_of_inventory": 36.6, "avg_landed_cost": 589.48},
+    "AMER": {"on_time_delivery_rate": 0.8735, "fill_rate": 0.9270,
+             "days_of_inventory": 36.6, "avg_landed_cost": 568.18},
 }
 ```
 
@@ -766,7 +778,46 @@ cases also need exact metric rules. The MCP server was dropped (ADR-008).
 
 ---
 
-_Open change requests: none. CR-006 accepted 2026-09-29 (v1.5)._
+### CR-007 — §5.3: bind the whole agent request as one JSON string
+
+**Requested by**: CoCo (B10, 2026-09-30)
+**Status**: **ACCEPTED** by the user, 2026-09-30 (recorded by Claude Code). Applied in the §5.3 body as **v1.6** by CoCo, 2026-09-30; the app follows it from C6c.
+**Evidence**: `docs/artifacts/runs/C11_run.md` § "The §5.3 finding".
+
+**Reason**: live, `SNOWFLAKE.CORTEX.DATA_AGENT_RUN` requires its request argument to be a
+**constant**. The §5.3 form (`OBJECT_CONSTRUCT(… ? …)::VARCHAR`) is an expression and is
+rejected at compile time: *"argument 1 to function … SYSTEM$CORTEX_DATA_AGENT_RUN_V2 needs to
+be constant, found 'CAST(OBJECT_CONSTRUCT(…) AS VARCHAR(…))'"*. It fails with a `?` bind
+(`EXECUTE IMMEDIATE … USING`), a Scripting variable and a literal question alike. These work:
+a string literal, a single `?` bound to the whole JSON text, and a Scripting variable that
+holds the JSON text.
+
+**Proposed change** (§5.3 body, v1.6):
+
+```sql
+SELECT TRY_PARSE_JSON(
+  SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
+    'SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_AGENT',
+    ?,          -- the whole request as JSON text, built by the caller
+    TRUE
+  )
+) AS response;
+```
+
+The bound value is `{"messages": [{"role": "user", "content": [{"type": "text", "text": <question>}]}]}`
+(Python: `json.dumps(...)`, which escapes the question). Inside Snowflake Scripting, build it
+first with `req := (SELECT TO_JSON(OBJECT_CONSTRUCT(…, :question …)));`, then pass `:req`.
+
+**Impact**:
+- `app/utils/forge_data.build_agent_sql` and `ask_agent` (Claude Code): bind
+  `json.dumps(request)` instead of the question. The response shape is unchanged.
+- `eval/20_sp_run_eval.sql` (C11): already fixed at run time by CoCo (a 3-line diff in
+  `C11_run.md`).
+- Nothing else changes: agent FQN, response shape and roles are the same.
+
+---
+
+_Open change requests: none. CR-007 accepted 2026-09-30 (§5.3 body to v1.6, CoCo applies). CR-006 accepted 2026-09-29 (v1.5)._
 
 <!--
 To propose a change, append:

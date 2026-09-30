@@ -118,9 +118,10 @@ def test_same_screen_chips_follow_the_real_rows(same_screen):
 
 
 @pytest.mark.parametrize("forge", ["replay"], indirect=True)
-def test_rows_drawer_shows_each_real_record_masked_per_team(same_screen):
+def test_rows_drawer_shows_each_real_record_masked_per_team(same_screen, samples):
     records = same_screen["records"]
-    assert [r["ids"][0]["cells"][0]["text"] for r in records] == ["MAT000001", "MAT000002", "MAT000003"]
+    captured = samples["BUYER"]["rows"]  # art 04: the values follow each re-capture
+    assert [r["ids"][0]["cells"][0]["text"] for r in records] == [row["SAMPLE_PART_ID"] for row in captured]
     for record in records:
         for ids in record["ids"]:  # same record for all three teams
             assert len({c["text"] for c in ids["cells"]}) == 1
@@ -129,5 +130,6 @@ def test_rows_drawer_shows_each_real_record_masked_per_team(same_screen):
             masked = [c["masked"] for c in field["cells"]]
             assert masked == [config.MASKING_MATRIX[FIELDS[field["label"]]][p] != "visible" for p in PERSONAS]
     buyer = {f["label"]: f["cells"][1]["text"] for f in records[0]["fields"]}
-    assert buyer["Unit cost"] == "42.01" and buyer["Payment terms"] == "2/10 NET30"
+    assert buyer["Unit cost"] == f"{captured[0]['UNIT_COST']:.2f}"
+    assert buyer["Payment terms"] == captured[0]["PAYMENT_TERMS"]
     assert buyer["Customer name"] == "masked"

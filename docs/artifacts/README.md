@@ -54,10 +54,10 @@ so art 02–06 were captured on the v1 data and are re-captured on the new data.
 | `04_persona_outputs.json` | **B07b**, re-captured at **B08c** | Actual output of all three persona procedures, showing real masked values | **C6a** |
 | `05_metric_values.json` | **B08**, re-captured at **B09** | All 4 metric values, plus each metric broken out by every valid dimension | **C6b** |
 | `06_dimension_matrix.md` | **B08**, re-captured at **B09** | Every metric × dimension pairing actually tested: pass/fail, with the error text for failures | **C6b** |
-| `07_agent_response.json` | **B10** | ⭐ **A real, complete `DATA_AGENT_RUN` response** — unabridged | **C6c** |
-| `08_agent_answers.md` | **B10** | The whole evaluation set (about 25 questions): answers, generated SQL, pass/fail, latency | **C6c** |
+| `07_agent_response.json` | **B10** ✅ 30 Sep | ⭐ **A real, complete `DATA_AGENT_RUN` response**, unabridged: the raw text byte for byte (Q02, OTD by region, 10:22 UTC, the CR-007 call form; stamp in `runs/C11_run.md`) | **C6c** |
+| `08_agent_answers.md` | **B10** ✅ 30 Sep | The whole evaluation set (30 questions, 27 passed): answers, generated SQL, pass/fail, latency | **C6c** |
 | `09_consistency_proof.json` | **B09** (old B11 merged in) | 4 metrics × 3 personas, real values, to 6 decimal places | **C6c** |
-| `10_dmf_results.json` | **B12** | `DATA_QUALITY_MONITORING_RESULTS` snapshot | Tab 5 |
+| `10_dmf_results.json` | **B12** ✅ 30 Sep | `DATA_QUALITY_MONITORING_RESULTS` snapshot (latest per association, 77), plus `SP_DATA_HEALTH('ALL')` per role and the shipments entity | Tab 5 |
 | `11_contract_audit.md` | **B14** | Line-by-line conformance result against `docs/CONTRACT.md`, plus the security review | all |
 | `12_scale_report.md` | **B13** | The scale proof on a clone: timings, partition pruning, credits, and proof the definitions and SQL shape didn't change | C05, README |
 

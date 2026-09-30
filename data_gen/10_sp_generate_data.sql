@@ -25,8 +25,8 @@ CREATE OR REPLACE PROCEDURE SUPPLY_CHAIN_FORGE.OPS.SP_GENERATE_DATA(
     TARGET_DB VARCHAR, SCALE_FACTOR FLOAT, SEED NUMBER, END_DATE DATE)
 RETURNS VARIANT
 LANGUAGE SQL
-EXECUTE AS CALLER
 COMMENT = 'C08: fills the 10 v2 source tables with clean, deterministic data (DATA_SPEC §2-§3). Mess comes from SP_INJECT_MESS.'
+EXECUTE AS CALLER
 AS
 $$
 DECLARE
@@ -113,13 +113,15 @@ BEGIN
     ) AS v(WERKS, NAME1, LAND1, REGION, PLANT_TYPE, CAPACITY_UNITS, CURRENCY);
 
     -- Capacity-weighted plant pick within a region: one row per capacity unit (10,000).
+    -- Numbers 1..N per row via FLATTEN(ARRAY_GENERATE_RANGE(...)), never a range join
+    -- (JOIN k ON k.k <= n): Snowflake can plan that as a Cartesian product (B12a: ~9 min
+    -- per history year instead of ~1 s). Same rows either way.
     CREATE OR REPLACE TEMPORARY TABLE TMP_PLANT_MAP AS
-    WITH k AS (SELECT ROW_NUMBER() OVER (ORDER BY SEQ8()) AS k FROM TABLE(GENERATOR(ROWCOUNT => 30))),
-    c AS (SELECT REGION, WERKS, units,
+    WITH c AS (SELECT REGION, WERKS, units,
                  SUM(units) OVER (PARTITION BY REGION ORDER BY WERKS ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum
           FROM TMP_PLANT)
-    SELECT c.REGION, c.cum - c.units + k.k AS t, c.WERKS
-    FROM c JOIN k ON k.k <= c.units;
+    SELECT c.REGION, c.cum - c.units + f.value::INT AS t, c.WERKS
+    FROM c, LATERAL FLATTEN(INPUT => ARRAY_GENERATE_RANGE(1, c.units + 1)) f;
 
     CREATE OR REPLACE TEMPORARY TABLE TMP_REGION_UNITS AS
     SELECT REGION, SUM(units) AS units FROM TMP_PLANT GROUP BY REGION;
@@ -342,9 +344,8 @@ BEGIN
     -- Weighted customer pick: weight unit t (1..total) -> customer. Customers are ordered by
     -- the day they become active, so "active on day d" is a prefix: t <= TMP_DAYS.w_cust.
     CREATE OR REPLACE TEMPORARY TABLE TMP_CUST_MAP AS
-    WITH k AS (SELECT ROW_NUMBER() OVER (ORDER BY SEQ8()) AS k FROM TABLE(GENERATOR(ROWCOUNT => 36)))
-    SELECT c.cum - c.weight + k.k AS t, c.KUNNR
-    FROM TMP_CUST c JOIN k ON k.k <= c.weight;
+    SELECT c.cum - c.weight + f.value::INT AS t, c.KUNNR
+    FROM TMP_CUST c, LATERAL FLATTEN(INPUT => ARRAY_GENERATE_RANGE(1, c.weight + 1)) f;
 
     -- ── 3. FX rates (TCURR, §2.1) ───────────────────────────────────────────
     -- Business days (Mon-Fri) from one week before the history to L; ~1% holidays (none
@@ -408,12 +409,13 @@ BEGIN
             DATEADD(day, (365 + FLOOR(u_d1 * CASE WHEN n_chg = 1 THEN 2920 ELSE 1460 END))::INT, :s_date) AS d1
           FROM c),
     e AS (SELECT d.*, DATEADD(day, (365 + FLOOR(u_d2 * 1095))::INT, d1) AS d2 FROM d),
-    k AS (SELECT ROW_NUMBER() OVER (ORDER BY SEQ8()) - 1 AS k FROM TABLE(GENERATOR(ROWCOUNT => 3))),
+    kk AS (SELECT e.*, f.value::INT AS k  -- segments 0 .. n_chg (FLATTEN, not a range join)
+           FROM e, LATERAL FLATTEN(INPUT => ARRAY_GENERATE_RANGE(0, e.n_chg + 1)) f),
     seg AS (
-        SELECT e.part_n, e.MATNR, e.STPRS, k.k,
-            CASE k.k WHEN 0 THEN :s_date WHEN 1 THEN DATEADD(day, 1, e.d1) ELSE DATEADD(day, 1, e.d2) END AS vdatu,
-            CASE WHEN k.k = e.n_chg THEN NULL WHEN k.k = 0 THEN e.d1 ELSE e.d2 END AS bdatu
-        FROM e JOIN k ON k.k <= e.n_chg),
+        SELECT kk.part_n, kk.MATNR, kk.STPRS, kk.k,
+            CASE kk.k WHEN 0 THEN :s_date WHEN 1 THEN DATEADD(day, 1, kk.d1) ELSE DATEADD(day, 1, kk.d2) END AS vdatu,
+            CASE WHEN kk.k = kk.n_chg THEN NULL WHEN kk.k = 0 THEN kk.d1 ELSE kk.d2 END AS bdatu
+        FROM kk),
     cnt AS (SELECT s.part_n, s.k, COUNT(*) AS n_elig
             FROM seg s JOIN TMP_SUP_P sp ON sp.eff_date <= s.vdatu GROUP BY s.part_n, s.k),
     prim AS (
@@ -421,11 +423,13 @@ BEGIN
         FROM seg s JOIN cnt ON cnt.part_n = s.part_n AND cnt.k = s.k
         JOIN TMP_SUP_P sp ON sp.r = LEAST(cnt.n_elig,
              1 + FLOOR(cnt.n_elig * BITAND(HASH(:SEED, 'SOURCING', s.part_n, s.k, 'primary'), 4294967295) / 4294967295.0))::INT),
-    ks AS (SELECT ROW_NUMBER() OVER (ORDER BY SEQ8()) AS j FROM TABLE(GENERATOR(ROWCOUNT => 2))),
+    ks AS (SELECT c.part_n, f.value::INT AS j  -- 0, 1 or 2 secondary rows (FLATTEN, not a range join)
+           FROM c, LATERAL FLATTEN(INPUT => ARRAY_GENERATE_RANGE(1,
+                CASE WHEN c.u_nsec < 0.45 THEN 0 WHEN c.u_nsec < 0.85 THEN 1 ELSE 2 END + 1)) f),
     sec AS (
         SELECT c.part_n, c.MATNR, c.STPRS, su.LIFNR, FALSE AS IS_PRIMARY,
                su.eff_date AS vdatu, su.phase_date AS bdatu, 10 + ks.j AS k
-        FROM c JOIN ks ON ks.j <= CASE WHEN c.u_nsec < 0.45 THEN 0 WHEN c.u_nsec < 0.85 THEN 1 ELSE 2 END
+        FROM c JOIN ks ON ks.part_n = c.part_n
         JOIN TMP_SUP su ON su.n = LEAST(150, 1 + FLOOR(150 * BITAND(HASH(:SEED, 'SOURCING', c.part_n, ks.j, 'secondary'), 4294967295) / 4294967295.0))::INT
         WHERE NOT EXISTS (SELECT 1 FROM prim pr WHERE pr.part_n = c.part_n AND pr.LIFNR = su.LIFNR)
         QUALIFY ROW_NUMBER() OVER (PARTITION BY c.part_n, su.LIFNR ORDER BY ks.j) = 1),
@@ -503,10 +507,9 @@ BEGIN
 
         -- Orders of year y: day d gets cnt(d) orders, numbered cum_prev + 1 … cum.
         CREATE OR REPLACE TEMPORARY TABLE TMP_O AS
-        WITH k AS (SELECT ROW_NUMBER() OVER (ORDER BY SEQ8()) AS k FROM TABLE(GENERATOR(ROWCOUNT => :max_k))),
-        o AS (SELECT d.d AS audat, d.cum_prev + k.k AS n, d.w_cust
-              FROM TMP_DAYS d JOIN k ON k.k <= d.cnt
-              WHERE d.yr = :y),
+        WITH o AS (SELECT d.d AS audat, d.cum_prev + f.value::INT AS n, d.w_cust
+              FROM TMP_DAYS d, LATERAL FLATTEN(INPUT => ARRAY_GENERATE_RANGE(1, d.cnt + 1)) f
+              WHERE d.yr = :y AND d.cnt > 0),
         u AS (
             SELECT o.*,
                 BITAND(HASH(:SEED, 'VBAK', o.n, 'cust'),   4294967295) / 4294967295.0 AS u_cust,
@@ -556,18 +559,19 @@ BEGIN
         -- (§2.2; a per-line plant would give ~2.3 shipments per order). A part the plant stocks; quantity log-uniform per category; price STPRS × U(1.15, 1.60)
         -- in the order currency; short-shipped with p = 0.20 (0.27 in 2021) × category factor.
         CREATE OR REPLACE TEMPORARY TABLE TMP_L AS
-        WITH k AS (SELECT ROW_NUMBER() OVER (ORDER BY SEQ8()) AS line_no FROM TABLE(GENERATOR(ROWCOUNT => 8))),
+        WITH k AS (SELECT o.*, f.value::INT AS line_no  -- lines 1 .. nlines (FLATTEN, not a range join)
+                   FROM TMP_O o, LATERAL FLATTEN(INPUT => ARRAY_GENERATE_RANGE(1, o.nlines + 1)) f),
         b AS (
-            SELECT o.n, o.audat, o.KUNNR, o.cust_region, o.waerk, o.is_shipped, o.home_werks, k.line_no,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'other'),  4294967295) / 4294967295.0 AS u_other,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'any'),    4294967295) / 4294967295.0 AS u_any,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'part'),   4294967295) / 4294967295.0 AS u_part,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'qty'),    4294967295) / 4294967295.0 AS u_qty,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'price'),  4294967295) / 4294967295.0 AS u_price,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'short'),  4294967295) / 4294967295.0 AS u_short,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'shortq'), 4294967295) / 4294967295.0 AS u_shortq,
-                BITAND(HASH(:SEED, 'VBAP', o.n, k.line_no, 'load'),   4294967295) / 4294967295.0 AS u_load
-            FROM TMP_O o JOIN k ON k.line_no <= o.nlines),
+            SELECT o.n, o.audat, o.KUNNR, o.cust_region, o.waerk, o.is_shipped, o.home_werks, o.line_no,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'other'),  4294967295) / 4294967295.0 AS u_other,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'any'),    4294967295) / 4294967295.0 AS u_any,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'part'),   4294967295) / 4294967295.0 AS u_part,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'qty'),    4294967295) / 4294967295.0 AS u_qty,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'price'),  4294967295) / 4294967295.0 AS u_price,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'short'),  4294967295) / 4294967295.0 AS u_short,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'shortq'), 4294967295) / 4294967295.0 AS u_shortq,
+                BITAND(HASH(:SEED, 'VBAP', o.n, o.line_no, 'load'),   4294967295) / 4294967295.0 AS u_load
+            FROM k o),
         p AS (
             SELECT b.*,
                 CASE WHEN b.u_other < 0.03 THEN 'PL' || LPAD(LEAST(12, 1 + FLOOR(b.u_any * 12))::INT, 2, '0')
@@ -589,12 +593,11 @@ BEGIN
         -- USD for US plants, else the plant currency on 55% of shipments.
         CREATE OR REPLACE TEMPORARY TABLE TMP_S AS
         WITH g AS (SELECT DISTINCT n, werks FROM TMP_L WHERE is_shipped),
-        parts AS (SELECT 1 AS part_no UNION ALL SELECT 2),
-        sp AS (
-            SELECT g.n, g.werks, parts.part_no, SUBSTR(g.werks, 3)::NUMBER AS plant_num
-            FROM g JOIN parts
-              ON parts.part_no = 1
-              OR BITAND(HASH(:SEED, 'VTTK', g.n, SUBSTR(g.werks, 3)::NUMBER, 'split'), 4294967295) / 4294967295.0 < 0.05),
+        sp AS (   -- part 1 always; part 2 on the 5% split (UNION ALL, not an OR join: see C08_run.md)
+            SELECT g.n, g.werks, 1 AS part_no, SUBSTR(g.werks, 3)::NUMBER AS plant_num FROM g
+            UNION ALL
+            SELECT g.n, g.werks, 2 AS part_no, SUBSTR(g.werks, 3)::NUMBER AS plant_num FROM g
+            WHERE BITAND(HASH(:SEED, 'VTTK', g.n, SUBSTR(g.werks, 3)::NUMBER, 'split'), 4294967295) / 4294967295.0 < 0.05),
         u AS (
             SELECT sp.*, o.KUNNR, o.prio, o.cust_region, o.cust_country, pl.REGION AS plant_region,
                    pl.LAND1 AS plant_country, pl.CURRENCY AS plant_currency, pl.ot_offset,
@@ -842,7 +845,7 @@ BEGIN
 
     -- ── 10. Result ──────────────────────────────────────────────────────────
     stage := 'result';
-    SELECT OBJECT_CONSTRUCT(
+    result := (SELECT OBJECT_CONSTRUCT(
                'status', 'OK', 'run_id', :run_id, 'target_db', :TARGET_DB, 'scale_factor', :SCALE_FACTOR,
                'seed', :SEED, 'end_date', :END_DATE,
                'rows', (SELECT OBJECT_AGG(TABLE_NAME, TO_VARIANT(VALUE::NUMBER)) FROM SUPPLY_CHAIN_FORGE.OPS.GEN_STATS
@@ -852,8 +855,7 @@ BEGIN
                                                             'rows', ROWS_WRITTEN,
                                                             'elapsed_s', DATEDIFF(millisecond, STARTED_AT, ENDED_AT) / 1000))
                                     WITHIN GROUP (ORDER BY STARTED_AT)
-                          FROM SUPPLY_CHAIN_FORGE.OPS.GEN_LOG WHERE RUN_ID = :run_id AND TABLE_NAME IS NOT NULL))
-      INTO :result;
+                          FROM SUPPLY_CHAIN_FORGE.OPS.GEN_LOG WHERE RUN_ID = :run_id AND TABLE_NAME IS NOT NULL)));
 
     INSERT INTO SUPPLY_CHAIN_FORGE.OPS.GEN_LOG (RUN_ID, TARGET_DB, STAGE, TABLE_NAME, CHUNK, ROWS_WRITTEN, STARTED_AT, ENDED_AT)
     SELECT :run_id, :TARGET_DB, 'done', NULL, NULL, NULL, :run_t0, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ;

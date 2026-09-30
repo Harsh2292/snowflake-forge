@@ -1,0 +1,28 @@
+# Keeps the public Community Cloud app awake for judges and its caches warm (C15), and fails
+# (so GitHub emails the owner) if a screen shows the "live connection paused" banner.
+# The URL is the repo variable PUBLIC_APP_URL (Settings > Secrets and variables > Actions >
+# Variables); without it the job is skipped. Scheduled runs only fire from the default branch.
+name: keep awake
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"  # every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Open every screen of the public app
+    if: ${{ vars.PUBLIC_APP_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: pip install playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python .github/scripts/keep_awake.py "${{ vars.PUBLIC_APP_URL }}"

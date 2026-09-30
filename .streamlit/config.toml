@@ -1,0 +1,11 @@
+# Base theme. The app re-themes itself (light/dark switch) with injected CSS in
+# ui/theme.py; these values colour the widgets Streamlit draws itself (toggles, focus rings).
+[theme]
+base = "light"
+primaryColor = "#1F63C4"
+backgroundColor = "#EDF1F6"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#16233B"
+
+[browser]
+gatherUsageStats = false

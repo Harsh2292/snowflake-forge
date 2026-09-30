@@ -1,5 +1,7 @@
 # Streamlit in Snowflake (warehouse runtime) dependencies: Snowflake Conda channel only,
-# `=` to pin, `*` for ranges, no pip section. Keep in step with requirements.txt.
+# `=` to pin, `*` for ranges, no pip section. Keep in step with app/requirements.txt.
+# Kept out of app/ on purpose (C15): Community Cloud would install from this file instead
+# of app/requirements.txt. deploy/deploy_app.py uploads it to the stage root.
 name: forge-demo
 channels:
   - snowflake

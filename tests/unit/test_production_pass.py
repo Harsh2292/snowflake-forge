@@ -52,11 +52,13 @@ def test_personas_compare_null_only_with_null(monkeypatch):
 
 
 def test_practice_data_mirrors_the_real_order_status_shape():
-    """Art 05: fill rate is NULL for OPEN/CANCELLED; shipment metrics exist only for shipped orders."""
+    """Art 05 (B09): fill rate is NULL for OPEN/CANCELLED; shipment metrics exist only for
+    orders that have shipments (never OPEN; the B08c data has shipments on a few orders
+    cancelled after shipping)."""
     fill = mock_data.metric_frame("fill_rate", "orders.order_status").set_index("ORDER_STATUS")["FILL_RATE"]
     assert fill[["OPEN", "CANCELLED"]].isna().all() and fill[["SHIPPED", "DELIVERED"]].notna().all()
     otd = mock_data.metric_frame("on_time_delivery_rate", "orders.order_status")
-    assert set(otd["ORDER_STATUS"]) == {"SHIPPED", "DELIVERED"}
+    assert set(otd["ORDER_STATUS"]) == {"SHIPPED", "DELIVERED", "CANCELLED"}
 
 
 def test_explore_offers_order_status_where_the_contract_allows_it():
@@ -139,6 +141,23 @@ def test_explore_labels_each_metric_with_its_window():
 # ── Dependencies ─────────────────────────────────────────────────────────────
 
 def test_environment_yml_and_requirements_pin_the_same_streamlit():
-    conda = re.search(r"streamlit=([\d.]+)", (APP / "environment.yml").read_text(encoding="utf-8")).group(1)
+    sis = APP.parent / "deploy" / "sis" / "environment.yml"  # moved out of app/ (C15)
+    conda = re.search(r"streamlit=([\d.]+)", sis.read_text(encoding="utf-8")).group(1)
     pip = re.search(r"streamlit==([\d.]+)", (APP / "requirements.txt").read_text(encoding="utf-8")).group(1)
     assert conda == pip
+
+
+# ── Data health at real scale (C6b: 77 DMF results in art 10) ────────────────
+
+def test_health_shows_one_row_per_kind_of_check_and_fits_its_view():
+    data = payloads.health("mock")
+    results = forge_data.get_quality_results()
+    assert len(results) == 77 and len(data["checks"]) == 17  # ROW_COUNT / FRESHNESS live in the table
+    kinds = {(c["name"], bool(c["note"])) for c in data["checks"]}
+    assert len(kinds) == len(data["checks"])
+    assert all(not c["note"] for c in data["checks"][:9]) and all(c["note"] for c in data["checks"][9:])
+    tech = " ".join(c["tech"] for c in data["checks"])
+    assert "CONFORMED.CUSTOMER, CONFORMED.CUSTOMER" not in tech  # each table named once
+    scored = results[results["STATUS"] != "INFO"]
+    assert (data["passing"], data["scored"]) == (int((scored["STATUS"] == "PASS").sum()), len(scored))
+    assert payloads.health_height(data) > payloads.health_height({**data, "checks": data["checks"][:3]})

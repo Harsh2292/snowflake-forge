@@ -23,8 +23,8 @@ CREATE OR REPLACE PROCEDURE SUPPLY_CHAIN_FORGE.OPS.SP_INJECT_MESS(
     TARGET_DB VARCHAR, SEED NUMBER, END_DATE DATE)
 RETURNS VARIANT
 LANGUAGE SQL
-EXECUTE AS CALLER
 COMMENT = 'C08: injects the DATA_SPEC §4 defects and edge cases into a clean load, with exact, hash-picked counts.'
+EXECUTE AS CALLER
 AS
 $$
 DECLARE
@@ -626,13 +626,12 @@ BEGIN
     SELECT :run_id, :TARGET_DB, 'MESSY', 'CHECKSUM', t, NULL, h,
            OBJECT_CONSTRUCT('seed', :SEED, 'end_date', :END_DATE), CURRENT_TIMESTAMP()::TIMESTAMP_NTZ FROM x;
 
-    SELECT OBJECT_CONSTRUCT(
+    result := (SELECT OBJECT_CONSTRUCT(
                'status', 'OK', 'run_id', :run_id, 'target_db', :TARGET_DB,
                'injected', (SELECT OBJECT_AGG(CODE, tables) FROM (
                                SELECT CODE, OBJECT_AGG(TABLE_NAME, TO_VARIANT(AFFECTED_ROWS)) AS tables
                                FROM SUPPLY_CHAIN_FORGE.OPS.GEN_MESS_LOG WHERE RUN_ID = :run_id GROUP BY CODE)),
-               'elapsed_s', DATEDIFF(millisecond, :run_t0, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ) / 1000)
-      INTO :result;
+               'elapsed_s', DATEDIFF(millisecond, :run_t0, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ) / 1000));
     INSERT INTO SUPPLY_CHAIN_FORGE.OPS.GEN_LOG (RUN_ID, TARGET_DB, STAGE, TABLE_NAME, CHUNK, ROWS_WRITTEN, STARTED_AT, ENDED_AT)
     SELECT :run_id, :TARGET_DB, 'done', NULL, NULL, NULL, :run_t0, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ;
     RETURN result;

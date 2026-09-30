@@ -31,6 +31,21 @@ def test_local_only_files_are_left_out():
     assert not any("__pycache__" in f or f.endswith(".pyc") for f in FILES)
 
 
+def test_sis_environment_comes_from_deploy_sis_to_the_stage_root():
+    """C15: app/ may hold only requirements.txt (Community Cloud would pick environment.yml)."""
+    assert not (ROOT / "app" / "environment.yml").exists()
+    assert deploy_app.local_path(Path("environment.yml")) == ROOT / "deploy" / "sis" / "environment.yml"
+    assert deploy_app.stage_folder(Path("environment.yml")) == deploy_app.STAGE_PATH
+
+
+def test_secrets_and_keys_are_never_uploaded(tmp_path):
+    (tmp_path / ".streamlit").mkdir()
+    for name in ["streamlit_app.py", ".streamlit/secrets.toml", "rsa_key.p8", "key.pem", "x.key"]:
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    uploaded = {f.as_posix() for f in deploy_app.app_files(tmp_path)}
+    assert uploaded == {"streamlit_app.py", "environment.yml"}
+
+
 def test_files_keep_their_folders_on_the_stage():
     assert deploy_app.stage_folder(Path("streamlit_app.py")) == deploy_app.STAGE_PATH
     assert deploy_app.stage_folder(Path("ui/views/fix.html")) == f"{deploy_app.STAGE_PATH}/ui/views"

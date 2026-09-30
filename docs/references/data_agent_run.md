@@ -9,7 +9,45 @@
 
 > Everything below is transcribed from the fetched pages unless marked **INFERRED**.
 > The one real gap in the docs is flagged in §6. Artifact `07_agent_response.json` (B10)
-> closes it.
+> closes it; §0 records what the live agent really does, and it wins over anything below.
+
+---
+
+## 0. Confirmed live (B10, 2026-09-30; art 07, art 08, `runs/C11_run.md`)
+
+**The request must be a constant (CR-007, accepted 30 Sep).** `DATA_AGENT_RUN` rejects an
+expression as its request argument, verbatim: *"argument 1 to function …
+SYSTEM$CORTEX_DATA_AGENT_RUN_V2 needs to be constant, found 'CAST(OBJECT_CONSTRUCT(…) AS
+VARCHAR(…))'"*. It fails with a `?` bind inside `OBJECT_CONSTRUCT`, with a Scripting
+variable, and with a literal question alike. These work:
+- a single `?` bound to the whole request JSON text. **This is the app's form:**
+  `forge_data.build_agent_sql()` + `agent_request(question)` = `json.dumps(...)`.
+- a string literal of the whole JSON (the scale harness's inactive agent rows)
+- in Snowflake Scripting, `req := (SELECT TO_JSON(OBJECT_CONSTRUCT(…)))`, then `:req`
+  (`eval/20_sp_run_eval.sql`)
+
+**The response (art 07):**
+- Top level: `role`, `content`, `metadata` (`run_id`, `thread_id`, `usage.tokens_consumed`),
+  `schema_version`, `sequence_number`, `status`.
+- `content` order in a verified-query answer: `thinking`, `tool_use`, `tool_result`, `text`,
+  `table`, `text`, `suggested_queries`.
+- **Tools:**
+  - A verified query runs as `system_execute_sql` (the tool name and type).
+  - Analyst questions add `supply_chain_analyst` and `system_agentic_semantic_context`.
+  - Q20 also used `server_skill` and `data_to_chart`.
+  - The data-health question used `data_health` (type `generic`).
+- **The Analyst tool_result payload** (closing §6): `json` has `query_id`, `result_set`,
+  `semantic_model_path`, `sql`, `verified_query_used`.
+- **`table` item:** `query_id`, `result_set`, `title`, `tool_use_id`. It repeats the
+  tool_result's result set (same `query_id`), so count it once.
+- **Text:** the answer comes first. A later `text` item repeats the SQL as a ` ```sql ` block,
+  and answers may use `**bold**` and blank or whitespace-only lines.
+- **`suggested_queries`:** `{"type": "suggested_queries", "suggested_queries": [{"query": "…"}, …]}`
+  (3 in art 07).
+
+The parser (`utils/agent_response.py`) follows this.
+`tests/artifacts/test_replay_agent.py` replays art 07 through the live path, and checks all
+30 art 08 answers.
 
 ---
 

@@ -62,11 +62,12 @@ def test_ask_starts_with_eight_question_cards_and_one_click_answers():
     at.button(key="qcard_1").click().run()
     assert not at.exception
     assert len(at.session_state.chat) == 1
-    assert at.session_state.chat[0]["result"]["sql"]
+    assert at.session_state.chat[0]["parts"][0]["result"]["sql"]
 
 
 def test_ask_renders_every_answer_and_can_start_over():
-    chat = [{"question": q, "result": forge_data.ask_agent(q)} for q in config.CANONICAL_QUESTIONS]
+    chat = [{"question": q, "parts": [{"question": q, "result": forge_data.ask_agent(q)}]}
+            for q in config.CANONICAL_QUESTIONS]
     at = run_app(step="ask", chat=chat)
     at.button(key="ask_clear").click().run()
     assert at.session_state.chat == []

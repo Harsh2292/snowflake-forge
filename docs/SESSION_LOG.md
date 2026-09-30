@@ -26,6 +26,601 @@
 
 ---
 
+## Session 40 — 2026-09-30 (evening) — CoCo
+
+**Milestone**: M5 (quality) + M6 prep (account switch)
+**Build steps completed**: C16 run (B12a part 1) ✅ · B09a (reduced) built · B08m prepared
+**Credits used this session**: small on the warehouse; ~30 agent calls ($2.83 `CORTEX_AGENTS` on 30 Sep). Old account balance at the end: **$135.91**
+
+### Done
+- **C16 run** (`runs/C16_run.md`): `quality/30` + `40` re-created as FORGE_ADMIN. Self-checks
+  **93/93 TRUE**; `SP_DATA_HEALTH('ALL')` **OK**, 5 × `REFERENCE`, identical as the 4 roles.
+  Art 10 re-captured (DMF values unchanged); `build_captured.py` rebuilt `captured.json`;
+  `pytest -q` 725 passed. Lock row DONE.
+- **B09a, reduced** (card `B09a_verified_queries_speed.md`): 3 verified queries (Q15 reliability
+  by supplier region, Q21 revenue, Q23 overall landed cost), each checked against the ground
+  truth. Agent: no `data_to_chart`, no SQL-block rule, plus a no-chart instruction (the
+  built-in chart skill still ran on Q02/Q05/Q14/Q19 before it; untested since). Eval reload
+  (`eval/10`, base64) + `SP_RUN_EVAL('b10-v2')` × 4 batches: **30/30** (baseline 27/30). Lock row
+  DONE; art 08 is re-written in the new account.
+- **Budget check → user decision: switch accounts now.** Old account $135.91 left; CoCo tokens
+  bill to the connected account.
+- **B08m prepared** (card `B08m_account_switch.md`): the new account `QURFOQP-XU04029` checked
+  (Enterprise, Azure Central India, cross-region Cortex, LA timezone, $399.68, empty). All 289
+  old-account objects matched to repo scripts (nothing hand-built). Run fixes confirmed in the
+  files. **2 replay blockers fixed:** `02_roles_grants.sql` → `CURRENT_USER()` (it named
+  `LAZYBOY`; the new user is `LAZYBOY2`), `01_database.sql` → `COMPUTE_WH` 60 s. New
+  `sql/replay_helper.py` (splitter, base64 wrap, one-call files, base64 JSON fetch), tested live.
+- Docs for a fresh session: COCO.md (connection, gotchas, planning-rule waiver), NEXT.md,
+  HANDOFF (CoCo section + 2 lock rows), COCO_TASKS, tasks README.
+- **B08m DONE in the same session** (the user: finish the move here; `runs/B08m_run.md`). The
+  whole build was replayed into `QURFOQP-XU04029` with no hand fix; the source data is
+  byte-identical (`HASH_AGG`, 10 tables); governed views, verified-query metrics, masking per
+  persona and persona procedures match the old account; self-checks 93/93; data health OK.
+  Eval `b10-v2` there: **28/30, p50 12.3 s** (baseline 27/30, 17.7 s). `vq_landed_cost_overall`
+  removed (it hijacked Q18); the view has 14 verified queries. Art 08 + art 10 re-captured,
+  `captured.json` rebuilt, `pytest -q` 725 passed.
+
+### Blocked / Open
+- C17 (nightly day-append) from Claude Code: **critical path** (the daily tables read WARN from
+  1 Oct ~17:00 UTC, in the new account too).
+- The user: the public key for `FORGE_APP_SVC`; the Community Cloud app with the new account's
+  secrets.
+
+### Next action (exact)
+- In `QURFOQP-XU04029`: give the user the secrets values, then B15a when the public key
+  arrives (`.agents/NEXT.md` → "CoCo → NEXT SESSION STARTS HERE").
+
+---
+
+## Session 39 — 2026-09-30 — Claude Code (close)
+
+**Milestone**: pre-cutover
+**Build steps completed**: none; session closed for the account move
+**Credits used this session**: 0
+
+### Done
+- Closed Claude Code's side for the move to a new Snowflake account ($400 credits, the user's
+  decision). The codebase is unchanged; only the secrets change (RUNBOOK §7).
+- NEXT.md ("⏸ Session closed") and HANDOFF have the move steps and the after-move order.
+
+### Blocked / Open
+- Waiting on the move (CoCo B08m) and the re-captured artifacts.
+
+### Next action (exact)
+- After the move: `tests/tools/build_captured.py` → `pytest -q` → C17 part B → C05 → live checks.
+
+---
+
+## Session 38 — 2026-09-30 — Claude Code
+
+**Milestone**: replan Day 2–3
+**Build steps completed**: C14b (the user's "more dynamic" request, approved the same day)
+**Credits used this session**: 0
+
+### Done
+- The router's vocabulary is generated from the semantic view (`build_vocabulary.py` →
+  `vocabulary.json`, with a freshness test); the hand-written regex lists are gone.
+- Every contract pairing is reachable, for example by facility, by client segment or by
+  transporter.
+- One-value questions read the breakdown row, with no new SQL. Names are learned from the view,
+  and only when a question needs them.
+- Small typos are forgiven.
+- `pytest -q` 725 passed, 0 failed (`test_router.py` 209); `pytest -m ui` 25/26 (the drawer
+  flake: 3/3 alone; recorded in NEXT).
+
+### Blocked / Open
+- The live gate from C14 (B15a) stands.
+
+### Next action (exact)
+- C05.
+
+---
+
+## Session 37 — 2026-09-30 — Claude Code
+
+**Milestone**: replan Day 2–3
+**Build steps completed**: C14 (offline gate)
+**Credits used this session**: 0 (no Snowflake access)
+
+### Done
+- **C14**: new `app/utils/router.py`:
+  - instant answers for known metric questions: one metric, at most one §4-valid dimension,
+    nothing else. They run the verified queries' own SQL through `forge_data.get_metric`
+  - multi-part questions split on clear boundaries, with agent parts in parallel
+  - the answer card says which path answered and the time taken
+- **"Ask is paused"** (CoCo's ask): "does not exist or not authorized" gives a note, not the
+  fallback banner; a 10 min process-wide pause; instant answers keep working.
+- `[forge] shortcut = false` off switch; Snowpark ≥ 1.24.
+- Tests: `tests/unit/test_router.py` (103). It checks the verified-query SQL text for text,
+  0 false shortcuts on art 08's 30, the splitter, parallel timing, paused, and the Ask flows
+  on replay. One browser test covers an instant card and a 2-part question. The older Ask
+  tests were updated for `chat[i]["parts"]`.
+- `pytest -q` 619 passed, 0 failed; `pytest -m ui` 24/24; screenshots checked.
+
+### Blocked / Open
+- Live gate: a suggested question in ~1–2 s at B15a / the rehearsal.
+- Noted for CoCo: in art 08 Q23 Analyst bypassed the governed landed-cost metric.
+
+### Next action (exact)
+- C05 (demo script, talking points, README, core-scalability doc), after the account switch
+  and the final numbers. Mention C14 in the demo script as a production pattern: fixed paths
+  for known intents, the LLM for the rest.
+
+---
+
+## Session 34 — 2026-09-30 — CoCo
+
+**Milestone**: pre-cutover
+**Build steps completed**: ran C17a (the generator range-join fix), DONE
+**Credits used this session**: ~0.12 (≈7 min XS)
+
+### Done
+- Scratch clone `SUPPLY_CHAIN_FORGE_C17A` (DMF schedules off; DTs suspended). The fixed
+  procedure was installed only in the scratch `OPS`.
+- **Pre-fix vs fixed at SF 0.01: identical checksums on all 10 tables** (123.6 s vs 114.3 s).
+- **Fixed at SF 1: 132.8 s** (+62.1 s mess). `TMP_O` is 1.5 s per year (was ~9 min). The
+  output is **byte-identical to production** on all 10 tables.
+- Deployed the fixed procedure to `SUPPLY_CHAIN_FORGE.OPS`; no data regenerated. The scratch DB
+  is dropped.
+- Lock row C17a → DONE; `runs/C17a_run.md`.
+
+### Next action (exact)
+- Unchanged: start with the **C16 run** (NEXT.md, "CoCo → NEXT SESSION STARTS HERE"). B08m no
+  longer waits on the generator fix.
+
+---
+
+## Session 33 — 2026-09-30 — CoCo
+
+**Milestone**: M6 (production): B15a Snowflake side
+**Build steps completed**: contract v1.6; B15a Snowflake side (card
+`B15a_public_link_trial.md`); artifact encoding fixes
+**Credits used this session**: small; FORGE_WH probes only, no agent calls
+
+### Done
+- **Contract v1.6** (CR-007 accepted by the user): §5.3 body, header, CR status.
+- **`sql/05_app_access/01_app_service_user.sql`**: `FORGE_APP_ROLE` (read-only) and
+  `FORGE_APP_SVC` (`TYPE = SERVICE`, no key yet). Verified as the role with secondary roles off:
+  - the semantic view needs **no** grants on the views underneath (`primary_sourcing` too)
+  - the DOI subquery needs SELECT on `V_INVENTORY`
+  - DMF results are visible (77 associations)
+  - masking applies; the numbers equal FORGE_ADMIN's; the persona procedures diverge; §8 works
+  - no account network policy
+- **`sql/05_app_access/02_cost_controls.sql`** (limits chosen by the user):
+  - `FORGE_WH_MONITOR`: 5 credits/day
+  - `OPS.FORGE_APP_CORTEX_BUDGET`: 25 credits/month of `FORGE_APP_SVC` agent use (user tag +
+    `CORTEX AGENT`). At 100% it calls `OPS.SP_STOP_PUBLIC_ASK` (revokes agent USAGE; Ask stops).
+    Tested, then restored.
+  - Measured: 0.04 credits per agent question; FORGE_WH peaks at 1.3 credits/day
+- **Encoding:**
+  - art 06 re-encoded (109 lines)
+  - one `§` fixed in each of art 05 and 09
+  - `sql/04_governance/05_persona_metric_procedures.sql` (3 comment lines) and a COCO_TASKS
+    heading fixed
+  - `build_captured.py` re-run: `captured.json` unchanged
+
+### Blocked / Open
+- **User:** the public key body (RUNBOOK step 1), then the Community Cloud app (step 3).
+- **Claude Code:** C6c. The B15a Ask check waits until they say it's done.
+- Suggested to Claude Code: a friendly "Ask is paused" message when the budget stop fires.
+
+### Next action (exact)
+- **Fix 2 decided: A (C17 day-append).** Option B (nightly full reload) was tested on a clone
+  (`runs/B12a_reload_test.md`):
+  - reads stayed safe while the DTs were suspended (18/18 probes)
+  - but the generator's `TMP_O` planned as a Cartesian join: ~9 min per year, ~1.5 h per night
+  - B also has cross-table inconsistency during the refresh and re-draws history
+
+  The clone is dropped. Asked Claude Code to fix the range join in `data_gen/10` too (the
+  cutover depends on it).
+- When the key arrives: `ALTER USER FORGE_APP_SVC SET RSA_PUBLIC_KEY = '…'`, check
+  `RSA_PUBLIC_KEY_FP`, then run the RUNBOOK step 4 gate (Ask included: C6c is done).
+- **Next session starts with the C16 run** (freshness fix 1, READY in the lock), then re-capture
+  art 10 and run `build_captured.py`. The full order is in NEXT.md, "CoCo → NEXT SESSION STARTS
+  HERE":
+  1. C16
+  2. B09a reduced (the user's yes/no pending)
+  3. B15a (the key)
+  4. B13
+  5. B08m account switch
+  6. C17 + B14 + B15 in the new account
+- The user said: switch accounts as soon as development completes. C17 (the day-append) is
+  deferred until after the switch (Claude Code's queue).
+
+---
+
+## Session 32 — 2026-09-30 — CoCo
+
+**Milestone**: M4 (conversational layer) + M5 (data quality)
+**Build steps completed**: B10 (gate 6/6), B12 (gate 6/6); ran C10 and C11 (both DONE)
+**Credits used this session**: not measured. ~36 agent calls (30 evaluation questions, a dry
+run, smoke tests, the art 07 capture), ~35 min of 5-minute DMF warm-up (serverless), small
+FORGE_WH queries. Plan mode waived by the user.
+
+### Done
+- **C10 objects first**, since the agent's `data_health` tool needs `SP_DATA_HEALTH`:
+  - files 00–40: 47 statements, all OK
+  - attach: **10 FRESHNESS errors**. `SNOWFLAKE.CORE.FRESHNESS` has no `TIMESTAMP_NTZ`
+    signature, and every `LOAD_TS` is NTZ; `CONFORMED.FX_RATE` has no `load_ts`. Run fix:
+    `ON ()` in 10 catalogue rows. Re-attach clean: 21 OK, 77 ADDED.
+- **B10 agent** `agent/01_agent.sql` (`claude-sonnet-4-5`):
+  - tools `supply_chain_analyst`, `data_to_chart`, `data_health` (`generic` →
+    `SP_DATA_HEALTH`)
+  - instructions for tool choice, refusals, clarifying questions, cross-grain refusal
+    (rule 8), numbered parts and the §3a window
+  - USAGE to the personas
+  - `COPY GRANTS` is rejected in `CREATE AGENT`, so the file re-grants
+- **Finding → CR-007 (proposed; the user approved filing it and continuing).**
+  `DATA_AGENT_RUN` needs a constant request. The contract §5.3 form
+  (`OBJECT_CONSTRUCT(… ? …)::VARCHAR`), the app's `build_agent_sql` and `SP_RUN_EVAL` all
+  fail at compile time. Binding the whole JSON as one `?` works. Run fix in
+  `eval/20_sp_run_eval.sql` (3 lines).
+- **C11 run:** 29 questions plus **Q30** (cross-grain "OTD by part category", REFUSE; added at
+  run time at the user's request). **27/30 = 90%**:
+  - canonical 8/8
+  - refusals, clarifying questions, cross-grain and data health all pass
+  - p50 17.7 s, p95 48.8 s
+  - failures: Q15 and Q21 are Analyst misses; Q17 is the ground truth dropping zero rows
+- **No masked value in any answer.** The agent's SQL ran as the **calling role**
+  (FORGE_ADMIN), not the default role.
+- **C10 run:**
+  - 77/77 associations have results
+  - self-checks 90/91 (`VBAP_E04` −1% against the strict lower bound; non-blocking)
+  - steady schedule `TRIGGER_ON_CHANGES` on all 21 tables
+  - `SP_DATA_HEALTH('ALL')` is identical for all 4 roles
+- **Artifacts:**
+  - art 07 (fresh raw Q02 response, byte for byte)
+  - art 08 (30 questions)
+  - art 10 (DMF snapshot + data health per role)
+  - run reports `C10_run.md`, `C11_run.md`
+
+### Blocked / Open
+- **CR-007 awaits the user's acceptance.** Claude Code then changes `forge_data.ask_agent`
+  (C6c).
+- For Claude Code:
+  - adopt the two run fixes
+  - fold Q30 and the 4th batch into `eval/`
+  - Q17's ground truth
+  - the E04 tolerance
+  - **master-data freshness makes `SP_DATA_HEALTH('ALL')` read FAIL** (parts and plants were
+    loaded in 2016)
+- CoCo tool note: the Windows tool bridge garbles non-ASCII text (the Hindi answer, `§`). Fetch
+  such text base64-encoded; edit files with the edit tool, not the REPL.
+
+### Next action (exact)
+- **Freshness demo risk (user-approved plan, 30 Sep):**
+  - DATA_SPEC §7.2 revised: reference entities get `freshness_status = 'REFERENCE'`
+  - DATA_SPEC §7.1a new: `OPS.SP_APPEND_DAY`, a nightly day-append
+  - Claude Code builds both after CR-007, in the lock by the end of 1 Oct (HANDOFF)
+  - CoCo runs them and schedules the nightly task (B12a), before the 2 Oct recording
+- B09a: generator + name search, plus verified queries for supplier reliability by region
+  (Q15) and revenue via `total_revenue` (Q21). Then re-run `SP_RUN_EVAL('b10-v2', …)`.
+- B15a when the user's Community Cloud setup is ready; B08m trial when the new account
+  connection exists.
+
+---
+
+## Session 36 — 2026-09-30 — Claude Code
+
+**Build steps completed**: C17 part A READY (the generator range-join fix)
+
+### Done
+- CoCo's answer on fix 2: A (build C17); B rejected after a clone test. CoCo also confirmed
+  app access, cost caps, contract v1.6, and art 06 fixed.
+- The user deferred the C17 day-append until after the account switch. The order is now
+  part A → C14 → C05 → C17.
+- Part A: 5 range joins in `data_gen/10_sp_generate_data.sql` → FLATTEN (the same rows); a
+  test guards it; in the lock with a checksum-proof step. `pytest -q` 516 passed.
+- C14 planned (card written); the "Ask is paused" message was added to its scope.
+
+### Next action (exact)
+- C14 (approved order): KPI shortcut + parallel multi-part router + "Ask is paused".
+
+---
+
+## Session 35 — 2026-09-30 — Claude Code
+
+**Build steps completed**: C13 READY; C17 on hold (the user sent option B to CoCo)
+
+### Done
+- C17 option B (a nightly full reload with the existing generator, no new code) was written
+  up in HANDOFF for CoCo to test; C17 is on hold until CoCo answers.
+- C13:
+  - 32 new live checks (semantic view objects, §7 columns, data health + DMFs, agent
+    behaviour)
+  - a per-contract-section summary (unit-tested)
+  - `tests/README.md`
+  - in the lock for B14
+  - `pytest -q` 510 passed, 0 failed
+
+### Next action (exact)
+- Wait for CoCo on C17 (A or B). Meanwhile plan C05 (demo script, README, scalability doc)
+  and C14 (stretch, kept by the user).
+
+---
+
+## Session 34 — 2026-09-30 — Claude Code
+
+**Build steps completed**: C16 READY (in the handoff lock)
+
+### Done
+- The user kept every task (C14 included) and approved C16.
+- Freshness fix 1 in `SP_DATA_HEALTH` + 2 self-checks; E04 tolerance; Q30, the 4th batch
+  and Q17's ground truth in `eval/`.
+- CoCo's run fixes adopted in the tests; the app shows REFERENCE neutrally (a new UI test).
+- `pytest -q` 495 passed, 0 failed; `pytest -m ui` 22/22.
+
+### Next action (exact)
+- Write the C17 card (nightly day-append, DATA_SPEC §7.1a) for approval; it goes in the lock
+  by the end of 1 Oct.
+- After CoCo re-captures art 10, run `tests/tools/build_captured.py`.
+
+---
+
+## Session 33 — 2026-09-30 — Claude Code
+
+**Build steps completed**: C6c (offline gate)
+
+### Done
+- CR-007 in the app (`build_agent_sql` + `agent_request`); scale harness AGENT rows
+  regenerated (inactive rows only).
+- Parser rebuilt against art 07 / art 08; answer card (light markdown, tool chips, health
+  line, agent chart title); Ask pills lead with the agent's suggestions; mock agent in the
+  real shape.
+- Replay extended to the agent (art 07) and data quality (art 10).
+- `pytest -q` 487 passed (the 3 C16 failures left); `pytest -m ui` 20/20; deliberate break
+  caught.
+- Recorded CoCo's new asks (freshness fixes 1 and 2) as C16 / C17 in NEXT.md, with the
+  user's approval.
+
+### Next action (exact)
+- Plan C16: the C10/C11 follow-ups + freshness fix 1 (`SP_DATA_HEALTH` REFERENCE status,
+  the app's neutral tone, Q30, the 4th batch, Q17, E04, tests for CoCo's run fixes).
+  Both fixes go in the handoff lock by the end of 1 Oct.
+
+---
+
+## Session 32 — 2026-09-30 — Claude Code
+
+**Build steps completed**: C6b (CR-007 accepted by the user and recorded)
+
+### Done
+- The user accepted CR-007 (contract §11 status updated; CoCo applies §5.3 to v1.6). The
+  user approved the order C6b → C6c → C10/C11 follow-ups → C13.
+- C6b:
+  - saved data = the last capture (`captured.json` + builder + drift test)
+  - config §10 re-synced
+  - art 05/06/09 reconcile tests
+  - the Data health view regrouped (77 → 17 rows) with its height following the content
+  - `pytest -q` 451 passed (3 C10/C11 left); `pytest -m ui` 20/20
+
+### Next action (exact)
+- Plan C6c: the CR-007 Ask call, and the parser fixes found against art 07 (the answer
+  text carries a SQL block, tool names, a duplicated table).
+
+---
+
+## Session 31 — 2026-09-30 — Claude Code
+
+**Milestone**: replan Day 2
+**Build steps completed**: C15 (Community Cloud readiness), offline gate
+
+### Done
+- Card `C15_community_cloud.md`, planned, then approved by the user after 2 additions
+  (a global rate limiter, and judge-experience items).
+- `docs/references/community_cloud.md` (fetched). It records two findings that would have
+  broken the public link:
+  - Community Cloud prefers `environment.yml` over `requirements.txt`, so the conda file
+    moved to `deploy/sis/`
+  - `config.toml` is read only at the repo root, so a copy now lives there
+- The connector takes `private_key` as DER bytes or base64-DER, not PEM, so the app
+  converts it.
+- **`forge_data`:**
+  - `configure()` switches live on in SiS or with a secrets connection
+  - `session_params()` builds the key-pair JWT
+  - a login breaker, reconnect-once, and per-thread notices
+- A fallback banner that stays on screen. `ask_guard.py`: the rate limiter, caps and
+  answer cache.
+- Screens cached for 12 h.
+- `test_no_secrets.py` in CI; a keep-awake workflow; `deploy/RUNBOOK.md`.
+- Tests:
+  - `pytest -q`: 437 passed, and 5 failures in files C15 doesn't touch (2 are C6b's job;
+    3 follow CoCo's run fixes to `quality/` and `eval/`)
+  - `pytest -m ui`: 20/20
+  - a real run from the repo root with secrets for a non-existent account showed the
+    banner on every data screen, and the keep-awake script caught it
+
+### Blocked / Open
+- CoCo: `sql/05_app_access/` still needs:
+  - the `DATA_QUALITY_MONITORING_VIEWER` role
+  - USAGE on the database and schemas
+  - an answer on whether the semantic view needs SELECT on its base objects
+
+  All in HANDOFF.
+- The user: generate the key pair, create the Community Cloud app, paste the secrets, set
+  `PUBLIC_APP_URL` (RUNBOOK §1, 3, 5).
+
+### Next action (exact)
+- C6b: re-sync `config.py` mocks to contract §10, and reconcile art 05/06/09. This fixes
+  the 2 C6b test failures, and makes the fallback show the latest live numbers.
+
+---
+
+## Session 30 — 2026-09-29 — CoCo
+
+**Milestone**: M3
+**Build steps completed**: B09 (gate 7/7)
+**Credits used this session**: small. Warehouse: 1 matrix block (100 queries) plus a few
+checks on XS. Cortex: 10 Analyst calls.
+
+### Done
+- Card `.agents/tasks/coco/B09_semantic_view_v2.md`, written at planning time and approved.
+- **`semantic/01_semantic_view.sql` v2**:
+  - `primary_sourcing` table (no supplier fan-out)
+  - every business column (no masked money, no emails)
+  - E01 OTD, `line_revenue` on shipped qty, `order_year_quarter`
+  - 14 extra metrics and 4 named filters
+  - `AI_SQL_GENERATION`, `AI_QUESTION_CATEGORIZATION`, 12 verified queries
+- **`05_persona_metric_procedures.sql`**: §3a windows.
+- **Gate:**
+  - OTD 0.875262 · fill 0.926100 · DOI 36.436790 · landed 604.841638
+  - 58/58 pairings; 12/12 verified queries; supplier tie-out exact
+  - personas identical to 6 dp
+  - 8.3K tokens; Analyst 44.6 s → 24.9 s on 5 questions
+- **Art 05, 06, 09 captured.** Contract §10 mocks updated (CR-006).
+- HANDOFF, NEXT, COCO_TASKS and tasks/README updated.
+
+### Blocked / Open
+- **Finding:** Snowflake now runs the one-to-many cross-grain pairings that v1 rejected
+  (OTD/landed × `parts.*`, fill × `shipments.*`), and they multi-count. They're outside §4;
+  `AI_SQL_GENERATION` rule 8 bans them. B10's evaluation should test for the refusal.
+
+### Next action (exact)
+- B09a (generator + name search; it must reproduce this view), then B12 (run C10), then B10.
+
+---
+
+## Session 29 — 2026-09-29 — Claude Code
+
+**Milestone**: M4, replan Day 1 (late night)
+**Build steps completed**: C11 ✅ READY (handed to CoCo for B10); C10 re-issued (comment-only)
+**Credits used this session**: 0 (no Snowflake access)
+
+### Done
+- Planned C11 (card `C11_eval_set.md`); the user approved it, and I built it.
+- Built `eval/`:
+  - `00` grants
+  - `10` `OPS.EVAL_QUESTIONS`, 29 questions; the canonical ground truth is the app's own
+    SQL; the lookup IDs are picked from the data
+  - `20` `OPS.SP_RUN_EVAL` + `EVAL_RESULTS`, a deterministic grader (SCALAR, SET, TOP_N,
+    ORDERED, MULTI, TOOL, REFUSE, CLARIFY, plus the e-mail leak guard)
+  - `30` the optional `SP_BUILD_EVAL_DATASET` + `agent_eval_config.yaml` (native evaluation)
+  - `99` the driver, in three batches
+  - `README.md`
+- Adopted the lessons from CoCo's `C08_run.md` and `B08c_run.md`:
+  - no `;` in `--` comments; stripped from `quality/` and `eval/`, and now enforced by a test
+  - `COMMENT` before `EXECUTE AS`
+  - no `SELECT … INTO` with a scalar subquery and no `FROM`
+- Checked the C10 catalogue against CoCo's `CONFORMED` DDL: every column and the
+  `COST_OUTLIER` flag match.
+- Tests: new `tests/unit/test_eval_sql.py` (51 checks); I made 7 deliberate breaks and each
+  was caught. `pytest -q` 380 passed, 4 failed. All 4 are the art 04 replay tests (see
+  Blocked / Open).
+- Decided with the user: no request log or chat history (not in the problem statement or
+  the judging criteria).
+
+### Blocked / Open
+- Art 04 was re-captured at B08c with the new data. The practice rows in `mock_data` still
+  pin the v1 sample, so 4 replay tests fail until they're re-synced (C6a re-check).
+- C08: 2 non-blocking FALSE self-checks to tidy (the CARRIER_CD expectation after M01; the
+  2021 fill rate), from `C08_run.md`.
+
+- **Then (the user approved it): the C6a re-check.** `mock_data._SAMPLE_ROWS` re-synced from
+  the B08c art 04, and the drawer test now reads art 04 instead of pinning the values.
+  `pytest -q` 384 passed.
+
+- **Then C12** (card `C12_scale_harness.md`, which the user approved): `tests/scale/`:
+  - `00` grants
+  - `10` `OPS.SCALE_QUERIES`, 75 queries generated from the app's own SQL builders by
+    `build_scale_queries.py`
+  - `20` `OPS.SP_SCALE_RUN`, per §7.4, plus an optional `QUERY_FILTER`
+  - `99` three runs + the art 12 queries (3 claims, timing and pruning, volume, DT refresh,
+    credits)
+  - `report_template.md` and `README.md`
+- New `tests/unit/test_scale_sql.py` (16 checks); I made 5 deliberate breaks and each was
+  caught. `pytest -q` 400 passed. Handed over under the lock.
+
+### Next action (exact)
+- **Updated 30 Sep: B09 is done** (art 05/06/09 re-captured; contract §10 values replaced),
+  and the user decided the prototype link is Streamlit Community Cloud (CoCo's ADR-009 +
+  its request in HANDOFF). Order:
+  1. **C15**: Community Cloud readiness. CoCo's B15a trial today waits on it.
+  2. **C6b**: re-sync `config.py` mocks to §10 and reconcile art 05/06/09.
+  3. **C11 add-on**: "OTD by part category" → expect a refusal.
+  4. **C13**: live tests. Cross-grain pairings now run and multi-count (see CoCo's B09 note).
+
+---
+
+## Session 28 — 2026-09-29 — CoCo
+
+**Milestone**: M3
+**Build steps completed**: B08c (gate 7/7). C08 run: DONE
+**Credits used this session**: warehouses ~1.1 (FORGE_WH) + ~2.4 (COMPUTE_WH, whole day); CoCo itself 35.4 on 29 Sep. Balance USD 243.03
+
+### Done
+- Answered Claude Code's C08 message in HANDOFF: the B08b gate passed; accepted the M07
+  lower-case deviation and home plant per order; C09 part B go.
+- New files: `sql/01_setup/03_schemas_v2.sql` (`CONFORMED`, `OPS`),
+  `sql/02_tables/05_source_v2.sql` (10 v2 tables, change tracking),
+  `sql/04_governance/06_conformed_layer.sql` (`CODE_MAP`, `CALENDAR`, 10 incremental DTs).
+- Edited files:
+  - `01_tags.sql`: `SEMANTIC_ROLE` tag, TCURR tags
+  - `03_governed_views.sql`: re-pointed to CONFORMED, `SEMANTIC_ROLE` on every column,
+    `V_SOURCING` shows rows valid today
+- Ran C08 with 3 small run-blocking fixes (the diffs are in `docs/artifacts/runs/C08_run.md`).
+  One was an `OR` join that turned into a Cartesian join; fixing it cut SF 1 from ~22 min to
+  130 s, and the checksums are byte-identical before and after.
+- Gate: CONFORMED has 0 repairable defects, and `dq_flags` reconcile exactly with the injected
+  rows still in scope. Windowed metrics are identical for all personas: OTD 0.8683 (0.8753
+  with the E01 denominator), fill 0.9261, DOI 36.44, landed 604.84. Naive OTD is 0.6817. The
+  persona roles are isolated (tested with `USE SECONDARY ROLES NONE`).
+- Re-captured art 03 (same names, order and masking) and art 04 (new values).
+  `docs/artifacts/runs/B08c_run.md`.
+
+### Blocked / Open
+- Claude Code needs to re-sync `mock_data` from the new art 04: 4 replay tests fail until then.
+- Two C08 self-checks returned FALSE (not blocking). Suggested fixes are in `C08_run.md`.
+- The semantic view is still the B08 version: its OTD denominator doesn't exclude E01 rows,
+  and it has no `order_year_quarter`. That's B09.
+
+### Next action (exact)
+- **B09**, semantic view v2, per the plan the user approved and put on standby: write the card
+  `.agents/tasks/coco/B09_semantic_view_v2.md`, then build it and capture art 05, 06 and 09.
+  After that, B12 (C10 is READY).
+
+---
+
+## Session 27 — 2026-09-29 — Claude Code
+
+**Milestone**: M3/M4, replan Day 1
+**Build steps completed**: C10 ✅ READY (handed to CoCo for B12)
+**Credits used this session**: 0 (no Snowflake access)
+
+### Done
+- Planned C10 and wrote card `C10_data_quality.md`; the user approved it, and I built it.
+- `quality/` (6 SQL files + README), driven by one check catalogue, `OPS.DQ_CHECKS`
+  (77 rows):
+  - `00`: the catalogue, the valid-code tables, the aggregate-only `V_CONFORMED_FACTS`,
+    and grants
+  - `10`: 7 custom DMFs
+  - `20`: `SP_ATTACH_DMFS`, re-runnable, with the dynamic-table and CRON fallbacks
+  - `30`: `SEMANTIC.SP_DATA_HEALTH`, exactly the §7.2 shape, with a 16 KB guard
+  - `40`: `SP_DQ_SELF_CHECKS`, the gate as a table
+  - `99`: the run order (warm-up schedule → self-checks → `TRIGGER_ON_CHANGES`)
+- App: `NULL_COUNT` is informational (E01 stays in `CONFORMED` by rule); a new mock value
+  and label.
+- Tests:
+  - new `tests/unit/test_quality_sql.py` (47 checks); I made 5 deliberate breaks and each
+    was caught
+  - the account-name check now covers `quality/`
+  - the app never reads `CONFORMED` or `OPS`
+  - `pytest -q` 333 passed; `pytest -m ui` 20 passed; screenshots checked
+- Handed over under the lock (HANDOFF row READY), with 5 decisions and 8 things to verify
+  live.
+
+### Blocked / Open
+- The C10 live gate waits for B08c (data + `CONFORMED`) and then CoCo's B12 run.
+- Freshness on the static demo data reads `WARN` from about 1 Oct 17:00 UTC and `FAIL`
+  from 3 Oct (fixed `END_DATE`). This is flagged for the user; nothing changes unless
+  asked.
+
+### Next action (exact)
+- C11: the evaluation set and runner in `eval/`. Plan it and write the card
+  (DATA_SPEC §7.3, `docs/references/agent_evaluations.md`), then build it and hand it over.
+
+---
+
 ## Session 26 — 2026-09-29 — Claude Code
 
 **Milestone**: M6 (app production pass), replan Day 1

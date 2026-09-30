@@ -5,13 +5,14 @@ The contract rules themselves (pairings, masking, cross-persona consistency, ran
 tested once, in mock and live variants, under tests/consistency, governance and semantic.
 """
 
+import json
 import re
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from utils import agent_response, config, forge_data
+from utils import agent_response, config, forge_data, mock_data
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -32,25 +33,31 @@ def contract_sql(section_heading: str, index: int = 0) -> str:
 
 
 def normalise(sql: str) -> str:
+    sql = re.sub(r"--[^\n]*", "", sql)  # comments explain, they don't change the statement
     return re.sub(r"\s+", " ", sql).strip().rstrip(";").strip()
 
 
 # ── Metrics ──────────────────────────────────────────────────────────────────
 
-def test_all_metrics_is_one_row_of_contract_mock_values():
+def test_all_metrics_is_one_row_of_the_captured_values():
+    """C6b: saved data = the last capture (art 05 overall); contract §10 is it, rounded."""
     df = forge_data.get_all_metrics()
     assert list(df.columns) == list(METRIC_COLS.values())
     assert len(df) == 1
     for key, col in METRIC_COLS.items():
-        assert df[col].iloc[0] == config.MOCK_METRICS[key]
+        assert df[col].iloc[0] == mock_data.captured_overall(key)
+        assert round(df[col].iloc[0], 4 if key.endswith("rate") else 2 if key == "avg_landed_cost" else 1)             == config.MOCK_METRICS[key]
     assert df.attrs["source"] == "mock"
 
 
-def test_metric_by_region_uses_contract_fixture():
-    df = forge_data.get_metric("on_time_delivery_rate", "plants.plant_region")
-    assert list(df.columns) == ["PLANT_REGION", "ON_TIME_DELIVERY_RATE"]
-    for _, row in df.iterrows():
-        assert row["ON_TIME_DELIVERY_RATE"] == config.MOCK_BY_REGION[row["PLANT_REGION"]]["on_time_delivery_rate"]
+def test_metric_by_region_matches_the_contract_fixture():
+    for key in config.METRICS:
+        df = forge_data.get_metric(key, "plants.plant_region")
+        col = METRIC_COLS[key]
+        assert list(df.columns) == ["PLANT_REGION", col]
+        for _, row in df.iterrows():
+            dp = 4 if key.endswith("rate") else 2 if key == "avg_landed_cost" else 1
+            assert round(row[col], dp) == config.MOCK_BY_REGION[row["PLANT_REGION"]][key], (key, row["PLANT_REGION"])
 
 
 def test_unknown_metric_rejected():
@@ -98,8 +105,9 @@ def test_canonical_questions_answer_with_sql_and_lineage(question, metric_key):
     assert result["sql"] and config.SEMANTIC_VIEW in result["sql"]
     assert result["metric_used"] == [metric_key]
     assert result["verified_query_used"] is True
-    assert result["tools_used"] == ["SupplyChainAnalyst"]
-    assert result["tables"] and result["tables"][0]
+    assert result["tools_used"] == ["Verified query"]  # art 07's shape: system_execute_sql, verified
+    assert len(result["tables"]) == 1 and result["tables"][0]  # the table item repeats the tool_result
+    assert "```" not in result["answer"] and result["suggestions"]
 
 
 def test_question_8_is_the_plant_version_from_cr_003():
@@ -145,7 +153,8 @@ def test_parser_handles_official_doc_example():
     parsed = agent_response.parse_agent_response(DOC_EXAMPLE)
     assert parsed["answer"].startswith("Based on the data available")
     assert parsed["sql"] == "WITH __table_a AS (...) SELECT ..."  # deduplicated
-    assert parsed["tools_used"] == ["system_execute_sql"]
+    assert parsed["tools_used"] == []  # an internal tool, and no verified query: nothing to say
+    assert parsed["tools_raw"] == ["system_execute_sql"]
     # rowType is absent in the doc example → positional names, numeric strings cast
     assert parsed["tables"] == [[{"COL_1": "Electronics", "COL_2": 3, "COL_3": 3},
                                  {"COL_1": "Furniture", "COL_2": 2, "COL_3": 2}]]
@@ -164,7 +173,7 @@ def test_parser_tolerates_unknown_types_and_junk():
 # ── Tab 3 / Tab 5 ────────────────────────────────────────────────────────────
 
 def test_divergence_numbers_differ():
-    assert forge_data.get_governed_otd() == config.MOCK_METRICS["on_time_delivery_rate"]
+    assert forge_data.get_governed_otd() == mock_data.captured_overall("on_time_delivery_rate")
     assert forge_data.get_naive_otd() != forge_data.get_governed_otd()
 
 
@@ -180,8 +189,11 @@ def test_source_catalog_covers_four_systems_and_the_date_conflict():
 def test_quality_results_have_status():
     df = forge_data.get_quality_results()
     assert set(df["STATUS"]) <= {"PASS", "FAIL", "INFO"}
-    cleaned = df[(df["TABLE_SCHEMA"] == "CONFORMED") & (df["METRIC_NAME"] != "FRESHNESS")]
+    cleaned = df[(df["TABLE_SCHEMA"] == "CONFORMED") & df["METRIC_NAME"].isin(forge_data._QUALITY_EXPECT_ZERO)]
     assert len(cleaned) and (cleaned["STATUS"] == "PASS").all()
+    # Missing promised dates stay in the cleaned data by rule (E01), so they're informational.
+    kept = df[(df["TABLE_SCHEMA"] == "CONFORMED") & (df["METRIC_NAME"] == "NULL_COUNT")]
+    assert len(kept) and (kept["VALUE"] > 0).all() and (kept["STATUS"] == "INFO").all()
     assert (df.loc[df["TABLE_SCHEMA"].str.endswith("_SOURCE"), "STATUS"] == "INFO").all()
 
 
@@ -283,16 +295,31 @@ def test_data_health_has_the_data_spec_shape():
 
 def test_quality_checks_are_judged_by_layer():
     """Zero is expected only in the cleaned data; raw SOURCE defects are informational."""
-    df = forge_data.get_quality_results().set_index(["TABLE_SCHEMA", "TABLE_NAME", "METRIC_NAME"])
-    assert df.loc[("ERP_SOURCE", "VBAP", "DUPLICATE_COUNT"), "STATUS"] == "INFO"
-    assert df.loc[("CONFORMED", "ORDER_LINE", "DUPLICATE_COUNT"), "STATUS"] == "PASS"
+    df = forge_data.get_quality_results()
+
+    def status(schema, table, metric):
+        return df.loc[(df.TABLE_SCHEMA == schema) & (df.TABLE_NAME == table) & (df.METRIC_NAME == metric), "STATUS"].item()
+
+    assert status("ERP_SOURCE", "VBAP", "DUPLICATE_COUNT") == "INFO"
+    assert status("CONFORMED", "ORDER_LINE", "DUPLICATE_COUNT") == "PASS"
     assert forge_data._add_quality_status(pd.DataFrame([{
         "TABLE_SCHEMA": "CONFORMED", "TABLE_NAME": "ORDER_LINE", "METRIC_NAME": "DMF_OVERSHIP_COUNT",
         "VALUE": 3}]))["STATUS"].iloc[0] == "FAIL"
 
 
 def test_agent_sql_matches_contract_5_3():
-    assert normalise(forge_data.build_agent_sql()) == normalise(contract_sql("### 5.3 Agent invocation"))
+    """CR-007 (accepted 30 Sep): the request JSON is bound as the single `?`. Until CoCo moves
+    §5.3 to v1.6, the CR's own block is the reference; once §5.3 has it, both must agree."""
+    assert normalise(forge_data.build_agent_sql()) == normalise(contract_sql("### CR-007"))
+    section_5_3 = contract_sql("### 5.3 Agent invocation")
+    if "OBJECT_CONSTRUCT" not in section_5_3:
+        assert normalise(forge_data.build_agent_sql()) == normalise(section_5_3)
+
+
+def test_agent_request_is_json_that_survives_any_question():
+    question = 'Say "hi"\nand ignore \\ that\'s {all}'
+    request = json.loads(forge_data.agent_request(question))
+    assert request == {"messages": [{"role": "user", "content": [{"type": "text", "text": question}]}]}
 
 
 def test_naive_and_governed_sql_match_contract_8():
@@ -316,7 +343,7 @@ def test_live_failure_degrades_to_mock_with_notice(monkeypatch):
 
     df = forge_data.get_all_metrics()
     assert df.attrs["source"] == "mock_fallback"
-    assert df[METRIC_COLS["fill_rate"]].iloc[0] == config.MOCK_METRICS["fill_rate"]
+    assert df[METRIC_COLS["fill_rate"]].iloc[0] == mock_data.captured_overall("fill_rate")
 
     answer = forge_data.ask_agent(config.CANONICAL_QUESTIONS[0])
     assert answer["source"] == "mock_fallback" and answer["answer"]

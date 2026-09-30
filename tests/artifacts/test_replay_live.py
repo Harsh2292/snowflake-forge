@@ -44,7 +44,8 @@ def same(a, b) -> bool:
 
 
 def test_every_captured_pairing_goes_through_the_live_path(forge, captured):
-    assert len(pairings(captured)) == 55
+    # every contract §4 pairing, incl. orders.order_year_quarter (CR-006): 58 at B09
+    assert len(pairings(captured)) == sum(map(len, config.VALID_PAIRINGS.values())) == 58
     for key, dimension, rows in pairings(captured):
         df = forge.get_metric(key, dimension)
         dim_col, metric_col = config.column_name(dimension), config.column_name(config.METRICS[key]["id"])
@@ -93,15 +94,16 @@ def test_explore_shows_missing_fill_rate_for_open_and_cancelled(forge):
 
 def test_whole_app_runs_live_and_labels_its_source(forge, monkeypatch):
     """AppTest in live mode: screens with captured data say Live; the ones whose objects
-    don't exist yet (data quality checks) say practice values, and aren't cached."""
+    were never captured would say "Saved results" and show the banner (C15)."""
     for step, badge in [("explore", "Live"), ("same", "Live"),
-                        ("health", "Practice values (Snowflake unreachable)")]:
+                        ("health", "Live")]:  # art 10 replays SP_DATA_HEALTH + the DMF results (C6c)
         at = AppTest.from_file(str(APP), default_timeout=30)
         at.session_state["step"] = step
         at.run()
         assert not at.exception, at.exception
         header = " ".join(m.value for m in at.markdown)
         assert f'sf-tag">{badge}<' in header, step
+        assert ('data-source="mock_fallback"' in header) == (badge != "Live"), step  # C15 banner
     forge_data.pop_notices()
 
 

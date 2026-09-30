@@ -599,6 +599,56 @@ live). CoCo calls them as `ACCOUNTADMIN` (the source-table owner).
   variables in `00_params.sql`" idea in CLAUDE_TASKS C08: session variables don't survive
   between CoCo's calls (§8).
 
+### 7.1a Nightly day-append (added 2026-09-30, "freshness fix 2")
+
+Why: `LOAD_TS` stops at `END_DATE` 05:00, so without new data the daily entities read `WARN`
+36 h later and `FAIL` after 72 h (the video on 2 Oct, the judges after 4 Oct). The
+trailing-12-month window (§5.2) also moves every day, so without new days it loses its last
+days of data. A nightly feed fixes both, and it's what a real ERP/TMS/WMS does.
+
+| Procedure | Signature | Returns |
+|---|---|---|
+| `OPS.SP_APPEND_DAY` | `(TARGET_DB VARCHAR, SCALE_FACTOR FLOAT, SEED NUMBER, NEW_END_DATE DATE)` | VARIANT: `{"target_db", "from_end_date", "new_end_date", "days_added", "rows": {"<TABLE>": n, ...}, "injected": {...}, "elapsed_s"}` |
+
+Rules (the same generator, one day at a time):
+1. **Current end**: `from_end_date` = `MAX(LOAD_TS)::DATE` over `VBAK`, the day the last
+   nightly batch ran. If `NEW_END_DATE <= from_end_date`, return `days_added: 0` and write
+   nothing (idempotent, safe to re-run). Otherwise add every missing day in order, one
+   business day per loop (catch-up after a missed night, or after the B08m cutover, which
+   loads with `END_DATE '2026-09-30'`).
+2. **New business day `D`**: for each new end date `e` (from `from_end_date + 1` to
+   `NEW_END_DATE`), `D = e − 1`, the new `L`. New orders with `AUDAT = D` and their lines, at the
+   §3.1 volume for that date × `SCALE_FACTOR`, with IDs continuing after the current maximum.
+   Same hash recipe as §6, keyed on `(SEED, table, n)`, so a given day always produces the
+   same rows.
+3. **Lifecycle updates, as new row versions (the M02 pattern)**, never `UPDATE`:
+   - orders that ship on `D`: a new VBAK row with the new `GBSTK`, the line quantities
+     shipped, and the new VTTK shipment rows
+   - shipments delivered on `D`: a new VTTK row with `ACT_DLV_DT` and the new `SHP_STATUS`
+   - orders whose shipments are all delivered: a new VBAK row with `GBSTK = 'DELIVERED'`
+
+   Follow §3.2 exactly, as the full generator would have for `END_DATE = D + 1`. The
+   `CONFORMED` "latest `LOAD_TS` wins" rule (§5.1) then shows the current state.
+4. **Inventory**: a MARD snapshot for `D` (a daily snapshot, §3.7), from the pair's previous
+   snapshot plus the §3.7 noise.
+5. **Mess at the §4 rates** on the new rows only (M01, M03, E01, E04, E09 and so on), so the
+   DMFs keep seeing realistic defects. Rows are never older than the rules allow.
+6. **`LOAD_TS`** = `D + 1` at 02:00 plus 0–180 hash minutes (§3.8). The cap becomes
+   `NEW_END_DATE` 05:00. Masters (`LFA1`, `MARA`, `T001W`, `SOURCING`, `KNA1`, `TCURR`) are
+   unchanged, except one `TCURR` rate row per currency for `D`.
+7. Runs as `ACCOUNTADMIN` (the owner of the source tables), `EXECUTE AS CALLER`, schema
+   qualified, with a `GEN_LOG` row per stage like `SP_GENERATE_DATA`. One day at SF 1 is
+   ~180 orders, so each day takes seconds on XS.
+8. **Self-check**: `OPS.SP_GEN_SELF_CHECKS` still passes after a day-append (row counts
+   within ±1% of §2 for the longer history; one primary sourcing row per part; no
+   `LOAD_TS` above the cap). Plus an append check: calling
+   `SP_APPEND_DAY` twice with the same `NEW_END_DATE` adds nothing the second time.
+
+CoCo schedules it (B12a): a serverless task at 05:30 UTC calls
+`SP_APPEND_DAY('SUPPLY_CHAIN_FORGE', 1, 20260929, CURRENT_DATE())`, with the root task's
+`SUSPEND_TASK_AFTER_NUM_FAILURES`, in `sql/` (re-runnable). `CONFORMED` refreshes
+incrementally, and the DMFs run on change.
+
 ### 7.2 `SEMANTIC.SP_DATA_HEALTH` (C10, `quality/`; the agent's custom tool)
 
 ```sql
@@ -654,9 +704,15 @@ SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH(ENTITY VARCHAR) RETURNS VARIANT
 ```
 
 Status rules:
-- **Freshness**: `OK` if `latest_load_ts` is within 36 h of `generated_at`, `WARN` 36–72 h,
-  `FAIL` over 72 h. For the static demo data this will read `WARN`/`FAIL` after a few days;
-  that's true, not a bug (the app already treats freshness as informational).
+- **Freshness** (revised 2026-09-30 after B12, "freshness fix 1"): only for the **daily
+  entities** `orders`, `order_lines`, `shipments`, `inventory`: `OK` if `latest_load_ts` is
+  within 36 h of `generated_at`, `WARN` 36–72 h, `FAIL` over 72 h.
+  **Reference entities** (`suppliers`, `parts`, `sourcing`, `plants`, `customers`) change
+  rarely by nature (parts and plants were loaded in 2016), so their `freshness_status` is
+  **`REFERENCE`**: never judged on age, and it doesn't count toward `status`. They still
+  report `latest_load_ts` and `freshness_hours`, and all their checks still run. With the
+  nightly day-append (§7.1a) the daily entities stay `OK`; without it, they read `WARN`/`FAIL`
+  a few days after the load, and that's true, not a bug.
 - **SOURCE edge-case checks** (E-codes): `OK` if `rate ≤ threshold_rate` (twice the §4 rate),
   else `WARN`.
 - **SOURCE repairable checks** (M-codes): always `OK`. They are *expected* in raw data; the

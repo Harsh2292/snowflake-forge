@@ -42,3 +42,7 @@ CREATE WAREHOUSE IF NOT EXISTS FORGE_WH
     AUTO_RESUME = TRUE
     INITIALLY_SUSPENDED = TRUE
     COMMENT = 'Dedicated X-Small warehouse for Supply Chain Forge demo workload';
+
+-- 4. The account's default warehouse (tool calls that name no warehouse land here): suspend
+-- after 60 s, not the default 10 min. In the old account it was 94% of warehouse credits (B08m).
+ALTER WAREHOUSE IF EXISTS COMPUTE_WH SET AUTO_SUSPEND = 60;

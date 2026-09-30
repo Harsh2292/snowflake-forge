@@ -134,6 +134,11 @@ hr {{ border-color: {t['line']}; }}
 .sf-chip.off {{ background: transparent; color: {t['muted']}; border-style: dashed; }}
 .sf-banner {{ display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 24px;
   border-radius: 18px; background: {t['sel']}; color: {t['ink']}; font-size: 17px; font-weight: 500; }}
+/* Fallback banner (live connection lost) and Ask limit notes: they stay on screen (C15) */
+.sf-alert {{ display: flex; align-items: center; gap: 12px; padding: 12px 18px; margin: 0 0 14px; border-radius: 14px;
+  background: {t['surface']}; border: 1px solid {t['line']}; border-left: 4px solid {t['critical']}; color: {t['ink']};
+  font-size: 15px; line-height: 1.45; }}
+.sf-alert.note {{ border-left-color: {t['blue']}; }}
 .sf-table {{ width: 100%; border-collapse: collapse; font-size: 15px; color: {t['ink']}; }}
 .sf-table th {{ text-align: left; padding: 10px 8px; font-weight: 600; color: {t['ink2']}; border-bottom: 1px solid {t['line']}; }}
 .sf-table td {{ padding: 9px 8px; border-bottom: 1px solid {t['line']}; }}

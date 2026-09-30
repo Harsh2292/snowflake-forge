@@ -53,7 +53,7 @@ def test_no_clock_in_the_data(name):
 def test_no_file_names_an_account():
     """The account switch (1 Oct): nothing in the repo's runnable code may name the account."""
     pattern = re.compile(r"snowflakecomputing\.com|\bDA53081\b|ACCOUNT_LOCATOR|\borganization_name\b", re.I)
-    for folder in ("data_gen", "app", "deploy"):
+    for folder in ("data_gen", "quality", "eval", "tests/scale", "app", "deploy"):
         for path in (ROOT / folder).rglob("*"):
             if path.is_file() and path.suffix in {".sql", ".py", ".yml", ".toml", ".md", ".html", ".js"}:
                 assert not pattern.search(path.read_text(encoding="utf-8", errors="ignore")), path
@@ -126,3 +126,19 @@ def test_code_variants_are_exactly_the_spec_list():
     injected = {(d, c): lst.split("|") for d, c, lst in re.findall(r"\('(\w+)', '(\w+)', '([^']*)'\)", INJECT)
                 if d in {k[0] for k in spec}}
     assert injected == spec
+
+
+@pytest.mark.parametrize("path", SQL_FILES, ids=lambda p: p.name)
+def test_no_range_join_to_generate_numbers(path):
+    """B12a (CoCo's clone test): `JOIN k ON k.k <= cnt` planned as a Cartesian product, about
+    9 minutes per history year instead of ~1 s. Numbers 1..N come from
+    LATERAL FLATTEN(ARRAY_GENERATE_RANGE(...)) instead: the same rows, a linear plan."""
+    code = "\n".join(line.split("--", 1)[0] for line in path.read_text(encoding="utf-8").splitlines())
+    joins = re.findall(r"JOIN\s+(\w+)\s+ON\s+\1\.\w+\s*<=", code)
+    assert not joins, f"{path.name}: range join on a number generator ({joins})"
+    assert "GENERATOR(ROWCOUNT => :max_k)" not in code
+
+
+def test_generator_uses_flatten_for_every_expansion():
+    code = (DATA_GEN / "10_sp_generate_data.sql").read_text(encoding="utf-8")
+    assert code.count("LATERAL FLATTEN(INPUT => ARRAY_GENERATE_RANGE(") == 6  # plants, customers, sourcing ×2, orders, lines

@@ -28,3 +28,12 @@ snowflake_temp/
 CLAUDE.md
 .claude/
 .claudeignore
+
+# Streamlit secrets and Snowflake keys: never committed (C15). The shape is in
+# .streamlit/secrets.toml.example; tests/unit/test_no_secrets.py checks the repo.
+secrets.toml
+*.p8
+*.pem
+*.p12
+*.pfx
+rsa_key*

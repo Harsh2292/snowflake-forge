@@ -24,11 +24,11 @@ session, each carrying its own gate.
 Execute one card at a time. A card is done when its **Gate** passes, not when the SQL
 runs. Then update `NEXT.md`, `HANDOFF.md`, and `SESSION_LOG.md` as the card instructs.
 
-**Task Card & Planning Rule**: When moving to the next task, first enter plan mode, plan the task, author the task card markdown file (`.agents/tasks/coco/Bxx_...md`), get user confirmation, and only then proceed with implementation.
+**Task Card & Planning Rule**: When moving to the next task, first enter plan mode, plan the task, author the task card markdown file (`.agents/tasks/coco/Bxx_...md`), get user confirmation, and only then proceed with implementation. **Waived by the user from 30 Sep** for the cards already specified in `.agents/tasks/COCO_TASKS.md`: write or update the card and build it straight away. Stop and ask only for a contract change (a CR), anything destructive, or a spending limit.
 
 ## The Contract Is Binding
 
-`docs/CONTRACT.md` is frozen at v1.1. Claude Code is building the entire application
+`docs/CONTRACT.md` is frozen (now **v1.6**, CR-007 applied 30 Sep). Claude Code is building the entire application
 against it **in parallel, right now**, using a mock data layer. Every metric identifier,
 dimension identifier, governed view column name, role name, and FQN you create must
 match it exactly.
@@ -98,12 +98,20 @@ Full ownership table and the handoff lock for Claude Code's SQL:
 
 ## Snowflake Connection
 
-- **Connection**: `tyduokn-gf25237` (account `DA53081`, `AZURE_CENTRALINDIA`)
+- **Active account (from 30 Sep evening): the event account.** Connection **`QURFOQP-XU04029`**
+  (locator `VC33954`, user `LAZYBOY2`, `AZURE_CENTRALINDIA`, Enterprise, $399.68 free usage on
+  30 Sep). Pass `connection='QURFOQP-XU04029'` on every SQL call. The whole build was replayed
+  there on 30 Sep (B08m ✅, `docs/artifacts/runs/B08m_run.md`).
+- **Old account, no longer used:** connection `tyduokn-gf25237` (account `DA53081`). Never build
+  or drop anything there.
 - **Target Database**: `SUPPLY_CHAIN_FORGE`
 - **Source schemas**: `ERP_SOURCE`, `WMS_SOURCE`, `TMS_SOURCE`, `SRM_SOURCE`
-- **Derived schemas**: `GOVERNED`, `SEMANTIC`, `APP`
+- **Derived schemas**: `CONFORMED`, `GOVERNED`, `SEMANTIC`, `APP`, `OPS`
 - **Warehouse**: `FORGE_WH` (XSMALL, auto-suspend 60s)
-- **Roles**: `FORGE_ADMIN`, `PLANNER_ROLE`, `BUYER_ROLE`, `LOGISTICS_ROLE`
+- **Roles**: `FORGE_ADMIN`, `PLANNER_ROLE`, `BUYER_ROLE`, `LOGISTICS_ROLE`, `FORGE_APP_ROLE`
+  (the public app's service user `FORGE_APP_SVC`)
+- **Running repo SQL files:** `sql/replay_helper.py` (load it in the Python REPL; see its
+  docstring). It handles the non-ASCII problem of the tool bridge.
 
 ### Verified account capabilities
 
@@ -111,7 +119,10 @@ Full ownership table and the handoff lock for Claude Code's SQL:
 - Semantic views support `AI_VERIFIED_QUERIES`, `AI_SQL_GENERATION`,
   `AI_QUESTION_CATEGORIZATION` in DDL
 - `SNOWFLAKE.CORTEX.DATA_AGENT_RUN()` available — agent callable from plain SQL
-- **Budget (checked 2026-09-29)**: $400 of free usage, **ending 2026-10-18**. About $138 spent,
+- **Budget (checked 2026-09-30 evening):** old account **$135.91** left (read-only from now on);
+  event account **$399.68** (30 days from signup). Spend on 29 Sep was $126 (CoCo $109) and on
+  30 Sep $49 by the evening (CoCo $36).
+- **Earlier check (2026-09-29)**: $400 of free usage, **ending 2026-10-18**. About $138 spent,
   about $262 left.
   - Cortex Code is ~85% of spend. It's billed per token at $2/credit, and the 29 Sep session
     alone cost ~$45.
@@ -151,13 +162,25 @@ repo script, so the cutover is a replay. The code is account-agnostic (only docs
 
 ## Current State
 
-**Milestone**: M0 complete. M1 (Data Foundation) is next.
-**Next action**: See `docs/SESSION_LOG.md` — execute build step B1.
+**Updated 2026-09-30 late evening.** 16 of 21 CoCo cards are done (B09a and **B08m** today):
+**the whole build now runs in the event account `QURFOQP-XU04029`** (`runs/B08m_run.md`). Next:
+B15a (key + public link), B12a part 2 (C17 + the nightly task), B14, B15. Always start from
+`.agents/NEXT.md` → "CoCo → NEXT SESSION STARTS HERE".
 
 ## Critical Gotchas
 
-- **Cortex Agents use the caller's DEFAULT role**, not the session role. Grant agent
-  privileges to the default role explicitly or agent calls fail.
+- **Tool bridge and non-ASCII text:** the Windows tool bridge garbles non-ASCII (`§`, `→`, `—`,
+  Hindi). Send such SQL base64-encoded (`sql/replay_helper.py` does it), fetch such results
+  base64-encoded, and edit repo files with the edit tool, never through the Python REPL.
+- **Long calls:** the REPL can time out while the query keeps running: poll `QUERY_HISTORY`.
+  The REPL can also restart and lose its variables: re-load the helper.
+- **Timezone:** both accounts use America/Los_Angeles. Pass the UTC date explicitly to anything
+  date-driven (the nightly day-append).
+- **Clones:** a cloned dynamic table keeps reading the ORIGINAL database (the definitions name
+  it in full): re-create the DTs in any clone test.
+- **`CREATE OR REPLACE AGENT` drops its grants:** re-apply them, incl. the `FORGE_APP_ROLE`
+  grant in `sql/05_app_access/01_app_service_user.sql`.
+- **Agent tools run as the CALLING role** (observed at B10), not the user's default role.
 - **Semantic view clause order is enforced**: `TABLES` → `RELATIONSHIPS` → `FACTS` →
   `DIMENSIONS` → `METRICS`. Build incrementally (2 tables first), never all 9 blind.
 - **Row access policies must not change metric aggregates** across personas, or the

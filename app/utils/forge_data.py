@@ -10,15 +10,19 @@ label what it shows. This module never imports Streamlit, so it can be tested al
 """
 
 import json
+import logging
 import os
+import threading
+import time
 from dataclasses import dataclass
 
 import pandas as pd
 
 from . import config, mock_data, source_catalog
-from .agent_response import parse_agent_response
+from .agent_response import paused_result, parse_agent_response
 
 PERSONAS = list(config.PERSONA_ROLES)
+log = logging.getLogger("forge")  # WARNING lines reach Community Cloud's log panel (stderr)
 
 
 # ── Notices and mode ─────────────────────────────────────────────────────────
@@ -30,14 +34,27 @@ class Notice:
     error_code: object = None
 
 
-_notices: list[Notice] = []
+# Per thread: Streamlit runs each visitor's script run in its own thread, so on a public
+# app one visitor's fallback never shows up on another visitor's screen.
+_local = threading.local()
+
+
+def _notices() -> list[Notice]:
+    if not hasattr(_local, "notices"):
+        _local.notices = []
+    return _local.notices
 
 
 def pop_notices() -> list[Notice]:
     """Fallback warnings since the last call, for the UI to display."""
-    drained = list(_notices)
-    _notices.clear()
+    drained = list(_notices())
+    _notices().clear()
     return drained
+
+
+def add_notices(notices) -> None:
+    """Hand notices from a worker thread to this one (router.run_parallel)."""
+    _notices().extend(notices)
 
 
 def data_mode() -> str:
@@ -45,24 +62,148 @@ def data_mode() -> str:
 
 
 # ── Session ──────────────────────────────────────────────────────────────────
+# One session per process, shared by every visitor. Where it comes from, in order:
+#   1. Streamlit in Snowflake: get_active_session()
+#   2. Streamlit Community Cloud: the [connections.snowflake] secrets, key-pair JWT (C15)
+#   3. Local development: the named connection in SNOWFLAKE_CONNECTION_NAME
 
 _session = None
+_connection: dict | None = None  # the [connections.snowflake] secrets, set by configure()
+_login = {"failed_at": None, "error": ""}
+_session_lock = threading.Lock()
+
+_PASSED_THROUGH = ("account", "user", "role", "warehouse", "database", "schema")
+
+
+def configure(connection=None, settings=None) -> None:
+    """Called by streamlit_app.py on every run, with the secrets sections as plain dicts.
+    Live mode is the default wherever Snowflake is reachable: in SiS, or with a secrets
+    connection. `[forge] mode = "mock"` (or "live") in secrets overrides that."""
+    global _connection
+    _connection = dict(connection) if connection else None
+    mode = str((settings or {}).get("mode", "")).strip().lower()
+    if mode in ("live", "mock"):
+        config.USE_MOCK_DATA = mode == "mock"
+    elif _connection or _in_snowflake():
+        config.USE_MOCK_DATA = False
+
+
+_sis = {"checked": False, "session": None}
+
+
+def _in_snowflake() -> bool:
+    if not _sis["checked"]:
+        _sis["checked"] = True
+        try:
+            from snowflake.snowpark.context import get_active_session
+            _sis["session"] = get_active_session()
+        except Exception:
+            _sis["session"] = None
+    return _sis["session"] is not None
+
+
+def session_params(section) -> dict:
+    """Snowpark/connector parameters from the [connections.snowflake] secrets section.
+    The private key arrives as PEM text (Community Cloud has no key file) and is passed as
+    DER bytes, which every connector version accepts (docs/references/community_cloud.md §4).
+    Errors name missing keys, never values."""
+    section = dict(section or {})
+    missing = [k for k in ("account", "user") if not section.get(k)]
+    if not (section.get("private_key") or section.get("private_key_file")):
+        missing.append("private_key")
+    if missing:
+        raise ValueError(f"Snowflake secrets are missing: {', '.join(missing)}")
+    params = {k: section[k] for k in _PASSED_THROUGH if section.get(k)}
+    params.setdefault("warehouse", config.WAREHOUSE)
+    params.setdefault("database", config.DATABASE)
+    if section.get("private_key"):
+        params["private_key"] = _der_private_key(section["private_key"], section.get("private_key_passphrase"))
+    else:
+        params["private_key_file"] = section["private_key_file"]
+        if section.get("private_key_file_pwd"):
+            params["private_key_file_pwd"] = section["private_key_file_pwd"]
+    params.update({
+        "authenticator": "SNOWFLAKE_JWT",
+        "client_session_keep_alive": True,
+        "login_timeout": config.LOGIN_TIMEOUT_SECONDS,
+        "session_parameters": {"STATEMENT_TIMEOUT_IN_SECONDS": config.STATEMENT_TIMEOUT_SECONDS,
+                               "QUERY_TAG": "forge_app"},
+    })
+    return params
+
+
+def _der_private_key(text: str, passphrase=None) -> bytes:
+    from cryptography.hazmat.primitives import serialization
+    password = passphrase.encode() if isinstance(passphrase, str) and passphrase else None
+    try:
+        key = serialization.load_pem_private_key(str(text).strip().encode(), password=password)
+    except Exception:
+        # from None: never chain an exception that could carry key material into a log
+        raise ValueError("private_key in the Snowflake secrets is not a readable PEM private key") from None
+    return key.private_bytes(encoding=serialization.Encoding.DER,
+                             format=serialization.PrivateFormat.PKCS8,
+                             encryption_algorithm=serialization.NoEncryption())
 
 
 def get_session():
-    """Snowpark session: the active one inside SiS, else a local named connection."""
+    """The shared Snowpark session, created on first use (see the order above)."""
     global _session
-    if _session is None:
-        try:
-            from snowflake.snowpark.context import get_active_session
-            _session = get_active_session()
-        except Exception:
-            from snowflake.snowpark import Session
-            name = os.environ.get("SNOWFLAKE_CONNECTION_NAME")
-            if not name:
-                raise RuntimeError("No active Snowflake session and SNOWFLAKE_CONNECTION_NAME is unset")
-            _session = Session.builder.config("connection_name", name).create()
+    if _session is not None:
+        return _session
+    with _session_lock:
+        if _session is None:
+            _session = _new_session()
     return _session
+
+
+def _new_session():
+    if _in_snowflake():
+        return _sis["session"]
+    from snowflake.snowpark import Session
+    if _connection:
+        failed_at = _login["failed_at"]
+        if failed_at is not None and time.monotonic() - failed_at < config.LOGIN_RETRY_SECONDS:
+            raise RuntimeError(f"Snowflake login failed moments ago ({_login['error']}); not retrying yet")
+        try:
+            session = Session.builder.configs(session_params(_connection)).create()
+        except Exception as exc:
+            _login["failed_at"] = time.monotonic()
+            _login["error"] = (str(exc).splitlines() or [type(exc).__name__])[0][:300]
+            log.warning("forge: Snowflake login as %s failed: %s", _connection.get("user"), _login["error"])
+            raise
+        _login["failed_at"] = None
+        return session
+    name = os.environ.get("SNOWFLAKE_CONNECTION_NAME")
+    if not name:
+        raise RuntimeError("No active Snowflake session, no secrets connection, and SNOWFLAKE_CONNECTION_NAME is unset")
+    return Session.builder.config("connection_name", name).create()
+
+
+# Connector / server codes for a session that is gone: 390111 session no longer exists,
+# 390112 / 390114 token expired, 250001 / 250002 connection failed / closed.
+_GONE_CODES = {"390111", "390112", "390114", "250001", "250002"}
+_GONE_WORDS = ("token has expired", "session no longer exists", "connection is closed")
+
+
+def _session_gone(exc: Exception) -> bool:
+    code = str(getattr(exc, "sql_error_code", None) or getattr(exc, "errno", None) or "")
+    return code in _GONE_CODES or any(w in str(exc).lower() for w in _GONE_WORDS)
+
+
+def _drop_session() -> bool:
+    """Forget a dead session so the next call logs in again. False if there was none, or
+    if it's the SiS session (that one can't be replaced from here)."""
+    global _session
+    with _session_lock:
+        dead, _session = _session, None
+    _query_tag["path"] = None
+    if dead is None or dead is _sis["session"]:
+        return False
+    try:
+        dead.close()
+    except Exception:
+        pass
+    return True
 
 
 # ── SQL builders (pure; identifiers only ever come from the config allow-lists) ──
@@ -112,18 +253,24 @@ def build_metric_sql(metric_keys, dimension=None) -> str:
 
 
 def build_agent_sql() -> str:
-    """Contract §5.3. The question is bound as the single `?` parameter."""
+    """Contract §5.3 as CR-007 amends it (accepted 2026-09-30): DATA_AGENT_RUN needs its
+    request as a constant, so the whole request JSON is bound as the single `?`
+    (agent_request()). Building it in SQL with OBJECT_CONSTRUCT is rejected live."""
     return (
         "SELECT TRY_PARSE_JSON(\n"
         "  SNOWFLAKE.CORTEX.DATA_AGENT_RUN(\n"
         f"    '{config.AGENT}',\n"
-        "    OBJECT_CONSTRUCT('messages', ARRAY_CONSTRUCT(\n"
-        "      OBJECT_CONSTRUCT('role', 'user', 'content',\n"
-        "        ARRAY_CONSTRUCT(OBJECT_CONSTRUCT('type', 'text', 'text', ?)))))::VARCHAR,\n"
+        "    ?,\n"
         "    TRUE\n"
         "  )\n"
         ") AS response"
     )
+
+
+def agent_request(question: str) -> str:
+    """The value bound to build_agent_sql()'s `?`: one user message, as JSON text.
+    json.dumps escapes quotes and newlines, so no question can break out of it."""
+    return json.dumps({"messages": [{"role": "user", "content": [{"type": "text", "text": question}]}]})
 
 
 # Contract §8. The ONLY query in the app that reads a source schema.
@@ -159,13 +306,20 @@ def _run(label: str, live_fn, mock_fn):
     """Mock mode → mock. Live mode → live, degrading to mock with a Notice on any failure."""
     if config.USE_MOCK_DATA:
         return _tag(mock_fn(), "mock")
-    try:
-        _tag_queries(label.split("(")[0])
-        return _tag(live_fn(), "live")
-    except Exception as exc:  # the UI must never see a stack trace on stage
-        code = getattr(exc, "sql_error_code", None) or getattr(exc, "error_code", None)
-        _notices.append(Notice(label, str(exc).splitlines()[0][:300], code))
-        return _tag(mock_fn(), "mock_fallback")
+    for attempt in (1, 2):
+        try:
+            _tag_queries(label.split("(")[0])
+            return _tag(live_fn(), "live")
+        except Exception as exc:  # the UI must never see a stack trace on stage
+            # A long-lived public app outlives its login: log in again once, then give up.
+            if attempt == 1 and _session_gone(exc) and _drop_session():
+                log.warning("forge: Snowflake session expired during %s; logging in again", label)
+                continue
+            code = getattr(exc, "sql_error_code", None) or getattr(exc, "error_code", None)
+            message = (str(exc).splitlines() or [type(exc).__name__])[0][:300]
+            _notices().append(Notice(label, message, code))
+            log.warning("forge: live call %s failed, showing saved results: %s", label, message)
+            return _tag(mock_fn(), "mock_fallback")
 
 
 _query_tag = {"path": None, "enabled": True}
@@ -293,19 +447,34 @@ def get_masking_divergence(role) -> pd.DataFrame:
 
 def ask_agent(question: str, role=None) -> dict:
     """Ask the Cortex Agent. Returns {answer, sql, metric_used, verified_query_used,
-    tools_used, tables, warnings, status, raw, source}.
+    tools_used, tables, warnings, status, raw, source}. status is "paused" when the app's
+    role may not use the agent (agent_unavailable()).
 
-    `role` is unused: DATA_AGENT_RUN runs with the app owner's rights inside SiS.
+    `role` is unused: DATA_AGENT_RUN runs as the app's own role (the owner's in SiS,
+    FORGE_APP_ROLE on Community Cloud). Cost limits are the Ask screen's (utils/ask_guard.py).
     """
 
     def live():
-        df = _query(build_agent_sql(), params=[question])
+        try:
+            df = _query(build_agent_sql(), params=[agent_request(question)])
+        except Exception as exc:
+            if agent_unavailable(exc):  # the Cortex budget switched Ask off: not a fallback
+                log.warning("forge: the agent is not available to this role; Ask is paused")
+                return paused_result()
+            raise
         raw = df.iloc[0, 0] if not df.empty else None
         if raw is None:
             raise RuntimeError("DATA_AGENT_RUN returned no parseable response")
         return parse_agent_response(json.loads(raw) if isinstance(raw, str) else raw)
 
     return _run("ask_agent", live, lambda: parse_agent_response(_mock_agent_raw(question)))
+
+
+def agent_unavailable(exc: Exception) -> bool:
+    """The agent call failed because the role may not use the agent. CoCo's Cortex budget
+    (sql/05_app_access/02) revokes USAGE at 100%, and Snowflake then says the agent "does
+    not exist or not authorized". Ask shows "paused" for this, not the fallback banner."""
+    return "does not exist or not authorized" in str(exc).lower()
 
 
 def _mock_agent_raw(question: str) -> dict:
@@ -315,9 +484,14 @@ def _mock_agent_raw(question: str) -> dict:
         return mock_data.agent_response(mock_data.FREE_TEXT_ANSWER)
     metric_key, dimension = mock_data.CANNED_QUESTIONS[match]
     frame = mock_data.metric_frame(metric_key, dimension)
+    label = config.METRICS[metric_key]["label"]
+    title = label if dimension is None else f"{label} by {config.column_name(dimension).replace('_', ' ').title()}"
+    others = [q for q in mock_data.CANNED_QUESTIONS if q != match]
+    at = list(mock_data.CANNED_QUESTIONS).index(match)
     return mock_data.agent_response(
         mock_data.canned_answer(metric_key, dimension, frame),
-        sql=build_metric_sql(metric_key, dimension), frame=frame)
+        sql=build_metric_sql(metric_key, dimension), frame=frame, title=title,
+        suggestions=(others[at:] + others[:at])[:3])  # the next canonical questions, like the agent's
 
 
 def get_naive_otd():
@@ -359,7 +533,9 @@ def get_data_health(entity: str = "ALL") -> dict:
 # cleaned data (CONFORMED, and the GOVERNED views on it). In the raw SOURCE schemas the
 # injected defects are real and expected, so those results are informational. FRESHNESS and
 # ROW_COUNT are informational everywhere: demo data is loaded once, so its age only grows.
-_QUALITY_EXPECT_ZERO = {"NULL_COUNT", "DUPLICATE_COUNT", "DMF_ORPHAN_ORDER_LINES", "DMF_ORPHAN_SHIPMENTS",
+# NULL_COUNT is informational too: the one on CONFORMED (promised_delivery_date, E01) counts
+# rows kept on purpose and left out of on-time delivery, so it's non-zero by rule (C10).
+_QUALITY_EXPECT_ZERO = {"DUPLICATE_COUNT", "DMF_ORPHAN_ORDER_LINES", "DMF_ORPHAN_SHIPMENTS",
                         "DMF_OVERSHIP_COUNT", "DMF_NEGATIVE_ON_HAND_COUNT", "DMF_TEST_RECORD_COUNT",
                         "DMF_NONCONTRACT_CODE_COUNT"}
 

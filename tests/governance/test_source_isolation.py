@@ -16,6 +16,9 @@ SOURCE_SCHEMAS = ("ERP_SOURCE", "WMS_SOURCE", "TMS_SOURCE", "SRM_SOURCE")
 
 # Public functions that never send SQL of their own.
 NOT_QUERIES = {"pop_notices", "data_mode", "get_session", "validate", "default_where",
+               "configure", "session_params",  # C15: connection setup, no SQL
+               "agent_request",  # C6c: builds the bound JSON, sends nothing
+               "add_notices", "agent_unavailable",  # C14: notice hand-off, error check
                "get_source_schema_summary"}  # static catalog in both modes (C02)
 
 
@@ -63,6 +66,15 @@ def test_only_the_naive_otd_query_reads_source_schemas(statements):
         call()
     touching_source = {s for s in statements if any(schema in s.upper() for schema in SOURCE_SCHEMAS)}
     assert touching_source == {forge_data.NAIVE_OTD_SQL}
+
+
+def test_no_app_query_reads_conformed_or_ops(statements):
+    """The app reads the cleaned data only through the governed views and the semantic view,
+    and never the private OPS schema (C10: FORGE_ADMIN gets no SELECT on CONFORMED)."""
+    for call in CALLS.values():
+        call()
+    for sql in statements:
+        assert "CONFORMED." not in sql.upper() and ".OPS." not in sql.upper(), sql
 
 
 def test_every_statement_is_a_contract_pattern(statements):

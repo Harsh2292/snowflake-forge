@@ -3,9 +3,9 @@
 > **Replanned 2026-09-29 (user-approved)** by CoCo, with the user's permission to edit this
 > file once. Claude Code owns it from here on.
 >
-> **Progress:** C01 ✅ · C02 ✅ · C03 ✅ · C04 ✅ · C07 ✅ · C6a ✅ · C09 ✅ · C08 ✅ READY
-> (handoff lock, waiting for CoCo's B08c run). Remaining, in order:
-> **C10 → C11 → C6b → C12 → C6c → C13 → C05 → C14 (stretch)**. Live status is
+> **Progress:** C01 ✅ · C02 ✅ · C03 ✅ · C04 ✅ · C07 ✅ · C6a ✅ · C09 ✅ · C08 ✅
+> DONE (B08c) · C6a re-checked after B08c · C10 ✅ READY (handoff lock, B12) · C11 ✅ READY (handoff lock, B10) · C12 ✅ READY (handoff lock, B13). Remaining, in order:
+> **C6b ✅ → C6c ✅ → C13 ✅ → C14 ✅ → C05**. Live status is
 > in `.agents/NEXT.md`; each track's detail goes in its card under `.agents/tasks/claude/`
 > (write the card at planning time, before building, as always).
 >
@@ -113,15 +113,17 @@ The app has to survive realistic data and run live.
 `docs/references/data_metric_functions.md`, `docs/references/snowflake_scripting_procedures.md`,
 `docs/references/agent_custom_tools.md`.
 
-- [ ] `quality/01_custom_dmfs.sql`: custom DMFs, including `DMF_OVERSHIP_COUNT` (the name
-      the app expects), orphan lines, missing promised dates, negative on-hand, cost outliers
-- [ ] `quality/02_attach_dmfs.sql`: system DMFs (nulls, duplicates, freshness, row count)
-      plus the custom ones, attached to the right `SOURCE` and `CONFORMED` tables on a
-      schedule, as the spec lists
-- [ ] `quality/03_sp_data_health.sql`: `SEMANTIC.SP_DATA_HEALTH(entity VARCHAR)`, exactly the
-      signature and return shape in the spec. The agent calls it as a custom tool, and the
-      app can show it.
-- [ ] Hand over under the lock; CoCo runs it at B12 and attaches the tool at B10
+**✅ READY 2026-09-29** (card `.agents/tasks/claude/C10_data_quality.md`; the files are
+`quality/00`–`40` + `99_run.sql`, driven by one check catalogue, `OPS.DQ_CHECKS`).
+- [x] custom DMFs (`quality/10_custom_dmfs.sql`), including `DMF_OVERSHIP_COUNT` (the name
+      the app expects), orphan lines, negative on-hand, test records, non-contract codes,
+      cost outliers; missing promised dates use the system `NULL_COUNT`
+- [x] system and custom DMFs attached to the right `SOURCE` and `CONFORMED` tables on a
+      schedule (`quality/20_sp_attach_dmfs.sql`, `OPS.SP_ATTACH_DMFS`)
+- [x] `SEMANTIC.SP_DATA_HEALTH(entity VARCHAR)`, exactly the signature and return shape in
+      the spec (`quality/30_sp_data_health.sql`), plus the gate as a procedure
+      (`quality/40_sp_dq_self_checks.sql`)
+- [x] Handed over under the lock; CoCo runs it at B12 and attaches the tool at B10
 - **Gate** (CoCo's run report): the DMFs attach; results appear; `SOURCE` shows the
   injected defects and `CONFORMED` doesn't; `SP_DATA_HEALTH` returns the spec shape for
   every entity
@@ -202,13 +204,15 @@ replan.
 - [ ] The core-scalability doc (the prompt the user gave you)
 - **Gate**: a stranger can follow `demo_script.md` and reproduce the demo on the deployed app
 
-### C14 — Stretch: parallel multi-part router + KPI shortcut (Day 3, only if time is left)
+### C14 — Parallel multi-part router + KPI shortcut ✅ DONE 2026-09-30 (offline gate)
 
-- [ ] In `forge_data.ask_agent()`: split numbered multi-part questions (CoCo supplies a
-      governed splitter function if built), run the independent parts at once with Snowpark
-      async (`docs/references/snowpark_async.md`), and merge the answers in the order asked
-- [ ] KPI sub-questions go straight to `SEMANTIC_VIEW`, with no LLM
-- **Gate**: measured against a single agent call on the multi-part evaluation questions
+- [x] Multi-part questions split on clear boundaries (`app/utils/router.py`); agent parts
+      run at once (a thread pool on the thread-safe Snowpark session), one card per part, in
+      the order asked
+- [x] KPI questions and sub-questions go straight to `SEMANTIC_VIEW`, with no LLM
+- [x] CoCo's ask: "Ask is paused" when the Cortex budget revokes USAGE on the agent
+- **Gate**: the card's gate (0 false shortcuts on art 08's 30; parallel ≈ the slowest part).
+  The live timing is at B15a. Detail: `claude/C14_router_kpi_shortcut.md`
 
 ---
 

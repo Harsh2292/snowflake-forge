@@ -6,7 +6,7 @@ import re
 import pytest
 
 from app_driver import HEADINGS, SCREENSHOTS, expect
-from utils import config
+from utils import config, mock_data
 
 pytestmark = pytest.mark.ui
 
@@ -61,7 +61,7 @@ def test_fix_layer_click_shows_its_detail(app):
 def test_same_metric_tile_updates_all_three_persona_cards(app):
     view = app.go("same")
     view.locator("#tile-fill_rate").click()
-    expected = f"{config.MOCK_METRICS['fill_rate']:.6f}"
+    expected = f"{mock_data.persona_metrics_row('Planner')['FILL_RATE']:.6f}"  # art 09, C6b
     numbers = view.locator("section.g3 .num")
     expect(numbers).to_have_text([expected] * 3)
     expect(view.locator(".banner")).to_contain_text("fill rate")
@@ -69,10 +69,12 @@ def test_same_metric_tile_updates_all_three_persona_cards(app):
     drawer = view.get_by_role("dialog")
     expect(drawer.locator("thead th")).to_have_text(["", *[config.PERSONA_LABELS[p] for p in config.PERSONA_ROLES]])
     # the real captured rows (artifact 04, C6a), one record at a time, no sideways scroll
-    for text in ["MAT000001", "2/10 NET30", "Beacon Global Logistics - Division 001", "masked", "restricted"]:
+    # the values come from the practice rows, which a unit test keeps equal to art 04
+    first, second = mock_data._SAMPLE_ROWS[0], mock_data._SAMPLE_ROWS[1]
+    for text in [first[0], first[3], first[5], "masked", "restricted"]:  # part, payment terms, customer name
         expect(drawer).to_contain_text(text)
     drawer.get_by_role("button", name="Record 2").click()
-    expect(drawer).to_contain_text("Crestview Automotive Group - Division 002")
+    expect(drawer).to_contain_text(second[5])
     expect(drawer).not_to_contain_text("MAT000001")
     expect(drawer).not_to_contain_text("&rsquo;")  # text is escaped, so no HTML entities in it
     table = drawer.locator("table")
@@ -134,4 +136,44 @@ def test_ask_question_card_gives_an_answer_card_with_sql_and_definition(app):
     expect(card.locator("pre")).to_contain_text(config.SEMANTIC_VIEW)
     card.locator("#tab-definition").click()
     expect(card.get_by_role("tabpanel")).to_contain_text("On-Time Delivery")
+    app.assert_no_errors()
+
+
+def test_ask_instant_answer_and_a_two_part_question(app):
+    """C14: a suggested question answers on the instant path and says so; a numbered
+    question gets one card per part, under the one question, none of them cut off."""
+    app.go("ask")
+    app.page.locator(".st-key-qcard_1 button").click()
+    first = app.view
+    expect(first.locator('[data-route="instant"]')).to_have_count(1, timeout=15_000)
+    expect(first.get_by_text("Instant answer · governed semantic view")).to_be_visible()
+    question = "1. What is our fill rate? 2. What are days of inventory by plant?"
+    box = app.page.locator('[data-testid="stChatInputTextArea"]')
+    box.fill(question)
+    box.press("Enter")
+    frames = app.page.frame_locator('iframe[data-testid="stIFrame"]')
+    expect(frames.nth(2).locator("[data-part]")).to_have_text("What are days of inventory by plant?", timeout=15_000)
+    expect(frames.nth(1).get_by_text(question)).to_be_visible()
+    expect(frames.nth(1).locator("[data-part]")).to_have_text("What is our fill rate?")
+    expect(frames.nth(2).get_by_text(question)).to_have_count(0)  # the question shows once
+    for i in range(3):
+        cut_off = frames.nth(i).locator("body").evaluate("b => b.scrollHeight - window.innerHeight")
+        assert cut_off <= 0, f"answer card {i + 1}: {cut_off}px cut off at the bottom"
+    app.screenshot(f"{app.theme}-ask-instant-two-part")
+    app.assert_no_errors()
+
+
+def test_ask_one_value_question_answers_instantly(app):
+    """C14b: "fill rate in APAC" is that row of the by-region breakdown, on the instant path."""
+    app.go("ask")
+    box = app.page.locator('[data-testid="stChatInputTextArea"]')
+    box.fill("What is fill rate in APAC?")
+    box.press("Enter")
+    card = app.view
+    expect(card.locator('[data-route="instant"]')).to_have_count(1, timeout=15_000)
+    expect(card.get_by_role("tabpanel")).to_contain_text("Fill rate for APAC (region):")
+    expect(card.locator('[role="img"]')).to_have_count(1)  # the whole breakdown, for context
+    cut_off = card.locator("body").evaluate("b => b.scrollHeight - window.innerHeight")
+    assert cut_off <= 0, f"{cut_off}px cut off at the bottom"
+    app.screenshot(f"{app.theme}-ask-one-value")
     app.assert_no_errors()

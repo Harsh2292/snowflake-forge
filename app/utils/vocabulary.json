@@ -1,0 +1,186 @@
+{
+  "source": "semantic/01_semantic_view.sql",
+  "tables": {
+    "suppliers": [
+      "vendor"
+    ],
+    "parts": [
+      "material",
+      "SKU",
+      "item"
+    ],
+    "primary_sourcing": [],
+    "sourcing": [
+      "sourcing contract",
+      "approved vendor list"
+    ],
+    "plants": [
+      "facility",
+      "site",
+      "DC"
+    ],
+    "inventory": [
+      "stock"
+    ],
+    "customers": [
+      "client",
+      "account"
+    ],
+    "orders": [
+      "sales order"
+    ],
+    "order_lines": [
+      "order line",
+      "line item"
+    ],
+    "shipments": [
+      "delivery",
+      "consignment"
+    ]
+  },
+  "metrics": {
+    "on_time_delivery_rate": {
+      "id": "shipments.on_time_delivery_rate",
+      "synonyms": [
+        "OTD",
+        "on time delivery",
+        "delivery performance"
+      ]
+    },
+    "fill_rate": {
+      "id": "order_lines.fill_rate",
+      "synonyms": [
+        "fill rate",
+        "order fulfillment rate",
+        "service level"
+      ]
+    },
+    "days_of_inventory": {
+      "id": "inventory.days_of_inventory",
+      "synonyms": [
+        "DOI",
+        "days of supply",
+        "inventory days"
+      ]
+    },
+    "avg_landed_cost": {
+      "id": "shipments.avg_landed_cost",
+      "synonyms": [
+        "landed cost",
+        "all-in cost"
+      ]
+    }
+  },
+  "dimensions": {
+    "suppliers.supplier_name": {
+      "alias": "supplier_name",
+      "synonyms": [
+        "vendor name"
+      ]
+    },
+    "suppliers.supplier_region": {
+      "alias": "region",
+      "synonyms": []
+    },
+    "suppliers.supplier_tier": {
+      "alias": "supplier_tier",
+      "synonyms": []
+    },
+    "parts.part_name": {
+      "alias": "part_name",
+      "synonyms": []
+    },
+    "parts.category": {
+      "alias": "category",
+      "synonyms": [
+        "product category"
+      ]
+    },
+    "parts.subcategory": {
+      "alias": "subcategory",
+      "synonyms": []
+    },
+    "parts.is_critical": {
+      "alias": "is_critical",
+      "synonyms": []
+    },
+    "plants.plant_name": {
+      "alias": "plant_name",
+      "synonyms": [
+        "site name"
+      ]
+    },
+    "plants.plant_region": {
+      "alias": "region",
+      "synonyms": []
+    },
+    "plants.plant_country": {
+      "alias": "country",
+      "synonyms": []
+    },
+    "plants.plant_type": {
+      "alias": "plant_type",
+      "synonyms": []
+    },
+    "customers.customer_segment": {
+      "alias": "customer_segment",
+      "synonyms": [
+        "segment"
+      ]
+    },
+    "customers.customer_region": {
+      "alias": "region",
+      "synonyms": []
+    },
+    "orders.order_date": {
+      "alias": "order_date",
+      "synonyms": []
+    },
+    "orders.order_month": {
+      "alias": null,
+      "synonyms": []
+    },
+    "orders.order_quarter": {
+      "alias": null,
+      "synonyms": []
+    },
+    "orders.order_year": {
+      "alias": null,
+      "synonyms": []
+    },
+    "orders.order_year_quarter": {
+      "alias": null,
+      "synonyms": [
+        "quarter"
+      ]
+    },
+    "orders.order_status": {
+      "alias": "order_status",
+      "synonyms": []
+    },
+    "orders.order_priority": {
+      "alias": "order_priority",
+      "synonyms": []
+    },
+    "shipments.ship_date": {
+      "alias": "ship_date",
+      "synonyms": [
+        "departure date"
+      ]
+    },
+    "shipments.carrier": {
+      "alias": "carrier",
+      "synonyms": [
+        "transporter"
+      ]
+    },
+    "shipments.shipment_status": {
+      "alias": "shipment_status",
+      "synonyms": []
+    },
+    "inventory.snapshot_date": {
+      "alias": "snapshot_date",
+      "synonyms": []
+    }
+  }
+}

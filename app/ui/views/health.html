@@ -36,13 +36,18 @@ function render() {
 function tables() {
   if (!D.tables || !D.tables.length) return '';
   const tone = (s) => s === 'OK' ? 'var(--good)' : s === 'FAIL' ? 'var(--critical)' : 'var(--muted)';
+  // Reference data changes rarely, so SP_DATA_HEALTH doesn't judge it on age (C16): neutral, never red.
+  const word = (s) => s === 'REFERENCE' ? 'Reference' : s;
+  const reference = D.tables.some((t) => t.freshness === 'REFERENCE');
   return `<section class="card stack gap12" style="padding:22px 28px">
       <div class="row between" style="align-items:baseline;gap:16px;flex-wrap:wrap"><span class="h3">Freshness by table</span>
-        <span class="small muted">${esc(D.summary)}${D.tables_practice ? ' (practice values)' : ''}</span></div>
+        <span class="small muted">${esc(D.summary)}${D.tables_practice ? ' (last captured results)' : ''}</span></div>
       <table class="tbl"><thead><tr><th>Table</th><th class="n">Rows</th><th>Latest data</th><th>Freshness</th><th>Status</th></tr></thead>
       <tbody>${D.tables.map((t) => `<tr><td>${esc(t.name)}</td><td class="n">${esc(t.rows)}</td><td>${esc(t.latest)}</td>
-        <td style="color:${tone(t.freshness)};font-weight:600">${esc(t.freshness)}</td>
+        <td style="color:${tone(t.freshness)};font-weight:600">${esc(word(t.freshness))}</td>
         <td style="color:${tone(t.status)};font-weight:600">${esc(t.status)}</td></tr>`).join('')}</tbody></table>
+      ${reference ? `<span class="small muted">Reference data (suppliers, parts, plants, sourcing, customers) changes rarely,
+        so it isn’t judged on age. Its data-quality checks still run.</span>` : ''}
     </section>`;
 }
 mount(render, {});

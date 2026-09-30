@@ -173,3 +173,37 @@ as data changes.
 re-captured, although the §3 ranges are designed to hold. Contract CR-006 covers the
 edge-case metric rules, the time rule, the new schema and removing MCP. Post-hackathon
 productization is parked in `docs/ROADMAP.md`, gated on customer demand.
+
+---
+
+## ADR-009: The Submitted Prototype Link Is Streamlit Community Cloud, Live on Snowflake
+
+**Date**: 2026-09-29
+**Status**: Accepted (by the user), subject to the live trial (B15a)
+
+**Context**: The Hack2Skill form asks for one "Prototype Deployed Link" and a public GitHub
+repository, with no field for credentials. Judges must be able to open the link without a
+login to our account. A Streamlit-in-Snowflake URL can't do that: every Snowflake account is
+isolated, and a shared password login is now forced into MFA enrollment in Snowsight.
+
+**Decision**: Deploy the same `app/` to Streamlit Community Cloud from the public repo. It
+connects **live** to Snowflake as a dedicated `TYPE = SERVICE` user with key-pair auth (no
+MFA or password) and a narrow read-only app role. Every number still comes from the
+semantic view, the governed views and the persona procedures, so masking and the
+consistency proof are the same real Snowflake behaviour.
+
+| Considered | Why not chosen |
+|---|---|
+| SiS URL | Judges can't open it without a user in our account |
+| SiS embedded for external viewers | Needs the container runtime plus a separate minting page; more moving parts for the same result |
+| Community Cloud replaying captured artifacts | Not live data |
+
+**Consequences**:
+- The app needs a session factory: SiS `get_active_session()` if present, otherwise a session
+  built from `st.secrets`.
+- CoCo adds the app role and the service user as a re-runnable script.
+- The user holds the private key and pastes it only into the Community Cloud secrets.
+- The link is public, so cost is capped by design: a hard-suspend resource monitor on the
+  app's warehouse and a per-session cap on agent questions.
+- At cutover only the secrets change (account-agnostic code).
+- The SiS deploy (C07) stays as an optional in-Snowflake copy.

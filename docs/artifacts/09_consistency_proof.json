@@ -1,0 +1,185 @@
+{
+ "build_step": "B09",
+ "captured_at": "",
+ "payload": {
+  "source": "CALL SUPPLY_CHAIN_FORGE.GOVERNED.SP_METRICS_AS_{PLANNER,BUYER,LOGISTICS}() and SP_SAMPLE_AS_{...}() as FORGE_ADMIN (secondary roles NONE); each result read with TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT_KEEP_NULL(*))) FROM TABLE(RESULT_SCAN(LAST_QUERY_ID())). Metrics apply the contract §3a windows.",
+  "metrics_by_persona": {
+   "PLANNER": [
+    {
+     "AVG_LANDED_COST": 604.841638,
+     "DAYS_OF_INVENTORY": 36.43679,
+     "FILL_RATE": 0.9261,
+     "ON_TIME_DELIVERY_RATE": 0.875262,
+     "PERSONA": "PLANNER"
+    }
+   ],
+   "BUYER": [
+    {
+     "AVG_LANDED_COST": 604.841638,
+     "DAYS_OF_INVENTORY": 36.43679,
+     "FILL_RATE": 0.9261,
+     "ON_TIME_DELIVERY_RATE": 0.875262,
+     "PERSONA": "BUYER"
+    }
+   ],
+   "LOGISTICS": [
+    {
+     "AVG_LANDED_COST": 604.841638,
+     "DAYS_OF_INVENTORY": 36.43679,
+     "FILL_RATE": 0.9261,
+     "ON_TIME_DELIVERY_RATE": 0.875262,
+     "PERSONA": "LOGISTICS"
+    }
+   ]
+  },
+  "identical_to_6dp": true,
+  "samples_by_persona": {
+   "PLANNER": [
+    {
+     "CONTRACT_PRICE": null,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "accounts.payable0001@clientcorp.com",
+     "CUSTOMER_NAME": "Beacon Global Logistics - Division 0001",
+     "PAYMENT_TERMS": "*** RESTRICTED ***",
+     "PERSONA": "PLANNER",
+     "SAMPLE_CUSTOMER_ID": "CUST00001",
+     "SAMPLE_PART_ID": "MAT000001",
+     "SAMPLE_SUPPLIER_ID": "SUP00107",
+     "UNIT_COST": null
+    },
+    {
+     "CONTRACT_PRICE": null,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "accounts.payable0002@clientcorp.com",
+     "CUSTOMER_NAME": "Crestview Automotive Group - Division 0002",
+     "PAYMENT_TERMS": "*** RESTRICTED ***",
+     "PERSONA": "PLANNER",
+     "SAMPLE_CUSTOMER_ID": "CUST00002",
+     "SAMPLE_PART_ID": "MAT000002",
+     "SAMPLE_SUPPLIER_ID": "SUP00023",
+     "UNIT_COST": null
+    },
+    {
+     "CONTRACT_PRICE": null,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "accounts.payable0003@clientcorp.com",
+     "CUSTOMER_NAME": "Delta Energy Dynamics - Division 0003",
+     "PAYMENT_TERMS": "*** RESTRICTED ***",
+     "PERSONA": "PLANNER",
+     "SAMPLE_CUSTOMER_ID": "CUST00003",
+     "SAMPLE_PART_ID": "MAT000003",
+     "SAMPLE_SUPPLIER_ID": "SUP00032",
+     "UNIT_COST": null
+    }
+   ],
+   "BUYER": [
+    {
+     "CONTRACT_PRICE": 20.17,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "*** MASKED ***",
+     "CUSTOMER_NAME": "*** MASKED ***",
+     "PAYMENT_TERMS": "NET90",
+     "PERSONA": "BUYER",
+     "SAMPLE_CUSTOMER_ID": "CUST00001",
+     "SAMPLE_PART_ID": "MAT000001",
+     "SAMPLE_SUPPLIER_ID": "SUP00107",
+     "UNIT_COST": 22.2
+    },
+    {
+     "CONTRACT_PRICE": 51.28,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "*** MASKED ***",
+     "CUSTOMER_NAME": "*** MASKED ***",
+     "PAYMENT_TERMS": "NET30",
+     "PERSONA": "BUYER",
+     "SAMPLE_CUSTOMER_ID": "CUST00002",
+     "SAMPLE_PART_ID": "MAT000002",
+     "SAMPLE_SUPPLIER_ID": "SUP00023",
+     "UNIT_COST": 57.29
+    },
+    {
+     "CONTRACT_PRICE": 336.55,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "*** MASKED ***",
+     "CUSTOMER_NAME": "*** MASKED ***",
+     "PAYMENT_TERMS": "NET45",
+     "PERSONA": "BUYER",
+     "SAMPLE_CUSTOMER_ID": "CUST00003",
+     "SAMPLE_PART_ID": "MAT000003",
+     "SAMPLE_SUPPLIER_ID": "SUP00032",
+     "UNIT_COST": 363.36
+    }
+   ],
+   "LOGISTICS": [
+    {
+     "CONTRACT_PRICE": null,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "accounts.payable0001@clientcorp.com",
+     "CUSTOMER_NAME": "Beacon Global Logistics - Division 0001",
+     "PAYMENT_TERMS": "*** RESTRICTED ***",
+     "PERSONA": "LOGISTICS",
+     "SAMPLE_CUSTOMER_ID": "CUST00001",
+     "SAMPLE_PART_ID": "MAT000001",
+     "SAMPLE_SUPPLIER_ID": "SUP00107",
+     "UNIT_COST": null
+    },
+    {
+     "CONTRACT_PRICE": null,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "accounts.payable0002@clientcorp.com",
+     "CUSTOMER_NAME": "Crestview Automotive Group - Division 0002",
+     "PAYMENT_TERMS": "*** RESTRICTED ***",
+     "PERSONA": "LOGISTICS",
+     "SAMPLE_CUSTOMER_ID": "CUST00002",
+     "SAMPLE_PART_ID": "MAT000002",
+     "SAMPLE_SUPPLIER_ID": "SUP00023",
+     "UNIT_COST": null
+    },
+    {
+     "CONTRACT_PRICE": null,
+     "CREDIT_LIMIT": null,
+     "CUSTOMER_EMAIL": "accounts.payable0003@clientcorp.com",
+     "CUSTOMER_NAME": "Delta Energy Dynamics - Division 0003",
+     "PAYMENT_TERMS": "*** RESTRICTED ***",
+     "PERSONA": "LOGISTICS",
+     "SAMPLE_CUSTOMER_ID": "CUST00003",
+     "SAMPLE_PART_ID": "MAT000003",
+     "SAMPLE_SUPPLIER_ID": "SUP00032",
+     "UNIT_COST": null
+    }
+   ]
+  },
+  "masked_column_divergence": {
+   "UNIT_COST": {
+    "PLANNER": null,
+    "BUYER": 22.2,
+    "LOGISTICS": null
+   },
+   "PAYMENT_TERMS": {
+    "PLANNER": "*** RESTRICTED ***",
+    "BUYER": "NET90",
+    "LOGISTICS": "*** RESTRICTED ***"
+   },
+   "CUSTOMER_NAME": {
+    "PLANNER": "Beacon Global Logistics - Division 0001",
+    "BUYER": "*** MASKED ***",
+    "LOGISTICS": "Beacon Global Logistics - Division 0001"
+   },
+   "CREDIT_LIMIT": {
+    "PLANNER": null,
+    "BUYER": null,
+    "LOGISTICS": null
+   },
+   "CONTRACT_PRICE": {
+    "PLANNER": null,
+    "BUYER": 20.17,
+    "LOGISTICS": null
+   },
+   "CUSTOMER_EMAIL": {
+    "PLANNER": "accounts.payable0001@clientcorp.com",
+    "BUYER": "*** MASKED ***",
+    "LOGISTICS": "accounts.payable0001@clientcorp.com"
+   }
+  }
+ }
+}

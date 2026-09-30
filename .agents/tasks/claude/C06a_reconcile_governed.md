@@ -119,6 +119,25 @@ Not in scope: metric values and dimensions (C6b, art 05/06), agent parsing (C6c,
     overflow sideways.
   - Checked in light and dark screenshots.
 
+## Re-check after B08c (2026-09-29, approved by the user)
+
+CoCo re-captured art 03 and art 04 on the C08 data (the views now read `CONFORMED`).
+- **Art 03**: still matches. The same 65 columns in order, and masking on the same 6.
+- **Art 04**: new values:
+  - MAT000001 costs 22.20, supplier SUP00107, terms NET90
+  - customer names and e-mails now end in `0001`
+
+  4 replay tests failed, as designed.
+- **Fix**:
+  - `mock_data._SAMPLE_ROWS` re-synced from art 04 (3 records)
+  - `test_rows_drawer_shows_each_real_record_masked_per_team` now reads the expected values
+    from art 04 instead of pinning them, so a future re-capture fails only the equality
+    test, which is the one that should
+  - the browser test for the rows panel (`tests/ui/test_browser.py`) also pinned the v1
+    text. It now reads the practice rows, which the equality test keeps equal to art 04
+- `pytest -q` 384 passed; `pytest -m ui` 20 passed; the rows-panel screenshots were checked
+  in light and dark.
+
 ---
 
 ## On completion

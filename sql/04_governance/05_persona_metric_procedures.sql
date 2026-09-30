@@ -1,6 +1,6 @@
 -- ============================================================
 -- 05_persona_metric_procedures.sql — Persona Metric Procedures (consistency proof)
--- Task: B08 (CR-002)
+-- Task: B08 (CR-002); B09 applies the §3a time rule (CR-006)
 -- Owner: CoCo
 -- Schema: SUPPLY_CHAIN_FORGE.GOVERNED
 -- Run as: ACCOUNTADMIN (creates, then hands ownership to each persona role)
@@ -16,6 +16,10 @@
 --
 -- The three bodies are IDENTICAL; only the name and the owner differ.
 -- PERSONA is derived from CURRENT_ROLE(), so the row proves which role ran.
+--
+-- §3a (CR-006, from B09): one SEMANTIC_VIEW call per default window, as in
+-- contract §5.1: ship-date window for OTD and landed cost, order-date window
+-- for fill rate, latest snapshot for DOI. The shape is unchanged.
 -- ============================================================
 
 USE ROLE ACCOUNTADMIN;
@@ -39,15 +43,28 @@ $$
 DECLARE
     rs RESULTSET DEFAULT (
         SELECT REPLACE(CURRENT_ROLE(), '_ROLE', '') AS PERSONA,
-               on_time_delivery_rate                AS ON_TIME_DELIVERY_RATE,
-               fill_rate                            AS FILL_RATE,
-               days_of_inventory                    AS DAYS_OF_INVENTORY,
-               avg_landed_cost                      AS AVG_LANDED_COST
+               s.on_time_delivery_rate              AS ON_TIME_DELIVERY_RATE,
+               o.fill_rate                          AS FILL_RATE,
+               i.days_of_inventory                  AS DAYS_OF_INVENTORY,
+               s.avg_landed_cost                    AS AVG_LANDED_COST
         FROM SEMANTIC_VIEW(
             SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
-            METRICS shipments.on_time_delivery_rate, order_lines.fill_rate,
-                    inventory.days_of_inventory, shipments.avg_landed_cost
-        )
+            METRICS shipments.on_time_delivery_rate, shipments.avg_landed_cost
+            WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE())
+              AND shipments.ship_date <= CURRENT_DATE()
+        ) s,
+        SEMANTIC_VIEW(
+            SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+            METRICS order_lines.fill_rate
+            WHERE orders.order_date > DATEADD(month, -12, CURRENT_DATE())
+              AND orders.order_date <= CURRENT_DATE()
+        ) o,
+        SEMANTIC_VIEW(
+            SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+            METRICS inventory.days_of_inventory
+            WHERE inventory.snapshot_date =
+                  (SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)
+        ) i
     );
 BEGIN
     RETURN TABLE(rs);
@@ -71,15 +88,28 @@ $$
 DECLARE
     rs RESULTSET DEFAULT (
         SELECT REPLACE(CURRENT_ROLE(), '_ROLE', '') AS PERSONA,
-               on_time_delivery_rate                AS ON_TIME_DELIVERY_RATE,
-               fill_rate                            AS FILL_RATE,
-               days_of_inventory                    AS DAYS_OF_INVENTORY,
-               avg_landed_cost                      AS AVG_LANDED_COST
+               s.on_time_delivery_rate              AS ON_TIME_DELIVERY_RATE,
+               o.fill_rate                          AS FILL_RATE,
+               i.days_of_inventory                  AS DAYS_OF_INVENTORY,
+               s.avg_landed_cost                    AS AVG_LANDED_COST
         FROM SEMANTIC_VIEW(
             SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
-            METRICS shipments.on_time_delivery_rate, order_lines.fill_rate,
-                    inventory.days_of_inventory, shipments.avg_landed_cost
-        )
+            METRICS shipments.on_time_delivery_rate, shipments.avg_landed_cost
+            WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE())
+              AND shipments.ship_date <= CURRENT_DATE()
+        ) s,
+        SEMANTIC_VIEW(
+            SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+            METRICS order_lines.fill_rate
+            WHERE orders.order_date > DATEADD(month, -12, CURRENT_DATE())
+              AND orders.order_date <= CURRENT_DATE()
+        ) o,
+        SEMANTIC_VIEW(
+            SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+            METRICS inventory.days_of_inventory
+            WHERE inventory.snapshot_date =
+                  (SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)
+        ) i
     );
 BEGIN
     RETURN TABLE(rs);
@@ -103,15 +133,28 @@ $$
 DECLARE
     rs RESULTSET DEFAULT (
         SELECT REPLACE(CURRENT_ROLE(), '_ROLE', '') AS PERSONA,
-               on_time_delivery_rate                AS ON_TIME_DELIVERY_RATE,
-               fill_rate                            AS FILL_RATE,
-               days_of_inventory                    AS DAYS_OF_INVENTORY,
-               avg_landed_cost                      AS AVG_LANDED_COST
+               s.on_time_delivery_rate              AS ON_TIME_DELIVERY_RATE,
+               o.fill_rate                          AS FILL_RATE,
+               i.days_of_inventory                  AS DAYS_OF_INVENTORY,
+               s.avg_landed_cost                    AS AVG_LANDED_COST
         FROM SEMANTIC_VIEW(
             SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
-            METRICS shipments.on_time_delivery_rate, order_lines.fill_rate,
-                    inventory.days_of_inventory, shipments.avg_landed_cost
-        )
+            METRICS shipments.on_time_delivery_rate, shipments.avg_landed_cost
+            WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE())
+              AND shipments.ship_date <= CURRENT_DATE()
+        ) s,
+        SEMANTIC_VIEW(
+            SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+            METRICS order_lines.fill_rate
+            WHERE orders.order_date > DATEADD(month, -12, CURRENT_DATE())
+              AND orders.order_date <= CURRENT_DATE()
+        ) o,
+        SEMANTIC_VIEW(
+            SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV
+            METRICS inventory.days_of_inventory
+            WHERE inventory.snapshot_date =
+                  (SELECT MAX(snapshot_date) FROM SUPPLY_CHAIN_FORGE.GOVERNED.V_INVENTORY)
+        ) i
     );
 BEGIN
     RETURN TABLE(rs);

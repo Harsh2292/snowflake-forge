@@ -1,0 +1,32 @@
+# eval/agent_eval_config.yaml — Snowflake native agent evaluation (optional; C11)
+# Card: .agents/tasks/claude/C11_eval_set.md · Reference: docs/references/agent_evaluations.md §3–4
+#
+# Run (99_run.sql, step 5), as FORGE_ADMIN, after SP_BUILD_EVAL_DATASET and
+# SYSTEM$CREATE_EVALUATION_DATASET have created SUPPLY_CHAIN_FORGE.OPS.FORGE_EVAL_DATASET:
+#   PUT this file to @SUPPLY_CHAIN_FORGE.OPS.EVAL_CONFIG, then
+#   CALL EXECUTE_AI_EVALUATION('START', OBJECT_CONSTRUCT('run_name', 'b10-native-1'),
+#                              '@SUPPLY_CHAIN_FORGE.OPS.EVAL_CONFIG/agent_eval_config.yaml');
+#
+# No `dataset:` block: the dataset is created once by SQL (a `dataset:` block would try to
+# create it again on every START and fail; reference §3 "Dataset block caveat").
+# Metrics pinned to v3 (reference §3 "Metric versions"; v1's judge is legacy).
+# Pin agent_version to a committed version (e.g. VERSION$1) for repeatable runs (gotcha 3).
+
+evaluation:
+  agent_params:
+    agent_name: "SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_AGENT"
+    agent_type: "CORTEX AGENT"
+    agent_version: "LIVE"
+  run_params:
+    label: "C11 evaluation set"
+    description: "29 supply chain questions: the 8 canonical ones, lookups, totals, refusals, clarifications, Hindi, data health"
+  source_metadata:
+    type: "dataset"
+    dataset_name: "SUPPLY_CHAIN_FORGE.OPS.FORGE_EVAL_DATASET"
+
+metrics:
+  - name: "answer_correctness"
+    version: "v3"
+  - name: "logical_consistency"
+    version: "v3"
+  - "tool_selection_accuracy"

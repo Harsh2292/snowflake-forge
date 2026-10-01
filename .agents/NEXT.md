@@ -17,6 +17,18 @@
 
 ---
 
+## ✅ 1 Oct (Claude Code): README written (part of C05)
+`README.md` at the repo root covers:
+- the problem and the claim, screenshots (`assets/screenshots/`), the architecture (mermaid)
+- the metrics, the personas and masking, the data and its mess catalogue
+- the agent and the router, the results table, the repo layout
+- quickstart, the Snowflake build order, deployment, testing, configuration
+- how it was built, the docs index, limitations
+
+The numbers are from the captured artifacts and B08m. The rest of C05 is open: the demo
+script, the talking points and the core-scalability doc. `.streamlit/secrets.toml.example`
+now documents `shortcut`. `pytest -q` 725 passed.
+
 ## ⏸ Session closed 2026-09-30: moving to a new Snowflake account
 
 **The user (30 Sep, end of day):** the whole Snowflake setup moves to a **new account with the

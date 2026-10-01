@@ -412,7 +412,7 @@ def test_adversarial_questions_refuse_or_stay_safe_and_are_guarded():
 def test_guard_phrases_really_are_in_the_agents_instructions():
     """A leak guard is only useful if the agent's instructions contain its phrases."""
     agent = (ROOT / "agent" / "01_agent.sql").read_text(encoding="utf-8")
-    for phrase in ("Which tool, when", "Never compute or estimate", "Lead with the answer in one sentence",
+    for phrase in ("Which tool, when", "Never compute or estimate", "start with the direct answer", "Answer fast: every answer is timed",
                    "Do not call any tool", "supply_chain_analyst"):
         assert phrase in agent, phrase
 

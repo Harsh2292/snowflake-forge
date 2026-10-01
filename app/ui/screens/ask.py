@@ -275,12 +275,18 @@ def _chart_height(chart: dict) -> int:
     return 100 + 30 * len(chart["rows"])
 
 
+def _grid_height(grid: dict) -> int:
+    """answer.html's result table: its title, header row and one line per row."""
+    return 120 + 34 * len(grid["rows"])  # measured in Chromium 2 Oct, with a margin (and room for a side-scroll bar)
+
+
 def _card_height(card: dict) -> int:
     paragraphs = card["answer"].split("\n\n")
     lines = sum(math.ceil(max(len(line), 1) / 85) for p in paragraphs for line in p.split("\n"))  # conservative
     question_lines = sum(math.ceil(max(len(line), 1) / 60) for line in card["question"].splitlines()) or 1
     return (214 + 28 * lines + 10 * (len(paragraphs) - 1)
             + sum(_chart_height(c) for c in card.get("charts") or ([card["chart"]] if card["chart"] else []))
+            + sum(_grid_height(g) for g in card.get("grids") or [])
             + 44 * (len(card["warnings"]) + bool(card.get("health")))
             - (0 if card["question"] else 62) + (30 if card["part"] else 0)
             + 26 * (question_lines - 1)  # a long or multi-line question wraps

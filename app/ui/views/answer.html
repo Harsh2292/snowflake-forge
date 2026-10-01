@@ -30,6 +30,14 @@
 .qa-labels { display: flex; gap: 6px; padding: 6px 4px 0; }
 .qa-labels span { flex: 1; text-align: center; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qa-caption { margin-top: 8px; font-size: 12px; color: var(--muted); }
+/* Result rows the app can't chart (2 Oct): a quiet table, hairline rows, numbers right-aligned */
+.qa-grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+.qa-grid th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.qa-grid td { padding: 7px 10px; color: var(--ink2); border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.qa-grid tr:last-child td { border-bottom: 0; }
+.qa-grid tbody tr:hover td { background: var(--raised); }
+.qa-grid .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.qa-scroll { overflow-x: auto; }
 </style>
 <script>
 const D = DATA;
@@ -72,6 +80,22 @@ function chartHtml(c) {
   </div>`;
 }
 
+function cellHtml(format, v) {
+  if (format === 'text') return esc(v);
+  if (format === 'number') return missing(v) ? valueHtml(format, v)
+      : v.toLocaleString('en-US', { maximumFractionDigits: Number.isInteger(v) ? 0 : 2 });
+  return valueHtml(format, v);
+}
+
+function gridHtml(g) {
+  const note = g.total > g.rows.length ? `${g.rows.length} of ${g.total} shown` : '';
+  const head = `<div class="qa-head"><span class="qa-title">${esc(g.title || 'Result')}</span><span class="qa-note">${note}</span></div>`;
+  return `<div class="qa-chart" data-grid="1">${head}<div class="qa-scroll"><table class="qa-grid">
+    <thead><tr>${g.columns.map((c) => `<th class="${c.format === 'text' ? '' : 'n'}">${esc(c.label)}</th>`).join('')}</tr></thead>
+    <tbody>${g.rows.map((r) => `<tr>${r.map((v, i) => `<td class="${g.columns[i].format === 'text' ? '' : 'n'}" title="${g.columns[i].format === 'text' ? esc(v) : ''}">${cellHtml(g.columns[i].format, v)}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div></div>`;
+}
+
 /* The agent writes light markdown: paragraphs, line breaks and **bold**. Escape first, then
    turn only those into HTML (anything else stays plain text). */
 function prose(text) {
@@ -90,7 +114,7 @@ function render(s) {
       <span style="font-size:15px;font-weight:600;color:var(--blue)">${esc(d.formula)}</span><span class="small ink2" style="line-height:1.55">${esc(d.definition)}</span>
       <span class="small muted">${esc(d.id)} in ${esc(D.semantic_view)}</span></div>`).join('<hr class="rule" style="margin:14px 0">');
   else if (s.tab === 'raw') body = `<pre class="well" style="margin:0;overflow:auto;max-height:230px;font-size:12px;line-height:1.5">${esc(D.raw)}</pre>`;
-  else body = `${prose(D.answer)}${D.health ? `<div class="well small mt16">${icon('info', 16)} ${esc(D.health)}</div>` : ''}${(D.charts || []).map(chartHtml).join("")}
+  else body = `${prose(D.answer)}${D.health ? `<div class="well small mt16">${icon('info', 16)} ${esc(D.health)}</div>` : ''}${(D.charts || []).map(chartHtml).join("")}${(D.grids || []).map(gridHtml).join("")}
       ${D.warnings.map((w) => `<div class="well small mt16">${icon('info', 16)} ${esc(w)}</div>`).join('')}`;
 
   return `<div class="root stack gap12" style="padding:4px 16px 26px">

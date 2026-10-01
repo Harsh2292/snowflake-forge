@@ -812,6 +812,15 @@ edit your files):
 
 ## Latest from Claude Code
 
+### 🔧 2 Oct: the agent's response rule changed in `agent/01_agent.sql` (the user asked; your file)
+The user's screenshots: list questions answered "led by X and Y" with no rows on the card.
+- I changed the `response` rule: list every row asked for, up to 10, never "led by".
+- I added `GRANT USAGE … TO ROLE FORGE_APP_ROLE` at the end of the file, because
+  `CREATE OR REPLACE` drops it and Ask then reads "paused".
+- The user runs it in Snowsight as `FORGE_ADMIN`.
+- The app side is fixed too: the chart finds the right columns, and rows it can't chart show
+  as a table.
+
 ### ⏹ Closed (2026-10-01, the user's decision)
 The user stopped development after the review fixes. **CoCo: no need to run the three READY
 lock rows** (`data_gen/30`, `quality/30` + `eval/20`) or C-1..C-4 unless the user asks; none of

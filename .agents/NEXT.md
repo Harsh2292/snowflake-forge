@@ -17,6 +17,19 @@
 
 ---
 
+## 🔧 2 Oct fix: agent answers lost their data (the user's screenshots)
+
+"Top 5 EMEA suppliers by lead time" showed one sentence ("led by…") and no rows.
+- **Cause 1 (app):** the card drew data only as a chart. The chart read just the first two
+  columns (SUPPLIER_ID, SUPPLIER_NAME), so it found no number and showed nothing.
+- **Cause 2 (agent):** the response rule said "Keep answers brief".
+- **Fixed in the app:** the chart picks a name column and a measure column. Rows that can't be
+  charted show as a table (10 rows, "N of M shown"). Tests are in
+  `tests/unit/test_answer_tables.py`; `pytest -q` 809, `-m ui` 30/30. Ships on push.
+- **Fixed in `agent/01_agent.sql`:** list every row asked for ("- name: value", top 10), never
+  "led by". The file now also re-grants `FORGE_APP_ROLE`. **It isn't live until it's run in
+  Snowflake** (Snowsight, as `FORGE_ADMIN`, the whole file).
+
 ## ⏹ CLOSED (2026-10-01, the user's decision): the build is finished
 
 The user stopped development here. The UI was checked locally (mock data): "looks good".

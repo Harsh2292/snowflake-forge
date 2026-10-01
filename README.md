@@ -8,6 +8,9 @@ conversational analytics app, built entirely in Snowflake.
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.52.2-FF4B4B?logo=streamlit&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 
+### ▶ Live app: **[supply-chain-forge.streamlit.app](https://supply-chain-forge.streamlit.app)**
+Live on Snowflake, no login needed. If it has been idle, click "wake up" and give it a minute.
+
 Built for the **Snowflake CoCo CLI Hackathon (GCC Edition)**, problem statement *Supply Chain
 Ontology and Governed Conversational Analytics*.
 

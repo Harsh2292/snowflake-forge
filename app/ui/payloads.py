@@ -6,6 +6,7 @@ switching screens doesn't re-query Snowflake in live mode.
 """
 
 import json
+import re
 
 import pandas as pd
 import streamlit as st
@@ -368,16 +369,53 @@ def _value_format(value_col: str, keys: list, single: bool) -> str:
     return config.METRICS[keys[0]]["format"] if keys and single else "number"
 
 
+_ID_COL = re.compile(r"(^|_)(ID|KEY|CODE|NUMBER|NO|NUM)$", re.I)
+
+
+def _period(col: str) -> bool:
+    """A period column (ORDER_YEAR, SHIP_DATE, YEAR_QUARTER), matched on whole words, so a
+    duration such as LEAD_TIME_DAYS stays a measure."""
+    return any(word in TIME_WORDS for word in col.upper().split("_"))
+
+
+def _numeric(table: list, col: str) -> bool:
+    """Every non-empty value in this column is a number, and at least one is."""
+    values = [r.get(col) for r in table if r.get(col) is not None]
+    return bool(values) and all(_num(v) is not None for v in values)
+
+
+def _chart_columns(table: list):
+    """(label column, value column) for a chart, or None. 2 Oct: the agent's tables often
+    carry an ID, a name and a region before the measure (supplier lead times came back as
+    SUPPLIER_ID, SUPPLIER_NAME, REGION, LEAD_TIME_DAYS), so the first two columns aren't
+    enough. The value is the last measure column (not an ID or a period); the label is a
+    name column if there is one, else the first text column, else a period, else the first
+    other column (supplier tiers come back as "1", "2", "3")."""
+    cols = list(table[0])
+    measures = [c for c in cols if _numeric(table, c) and not _ID_COL.search(c) and not _period(c)]
+    if not measures:
+        return None
+    value_col = measures[-1]
+    others = [c for c in cols if c != value_col]
+    text = [c for c in others if not _numeric(table, c)]
+    named = [c for c in text if "NAME" in c.upper()]
+    periods = [c for c in others if _period(c)]
+    label_col = (named or text or periods or others or [None])[0]  # else the first other column (tiers "1", "2")
+    return (label_col, value_col) if label_col else None
+
+
 def _chart(table: list, total, title, keys: list, single: bool, sort: bool):
-    """A chart from one result table (a label column, then a numeric one), or None.
+    """A chart from one result table (a label column and a measure column), or None.
     Periods draw as columns in time order; anything else as horizontal bars, the
     same style as Explore (1 Oct: the old columns looked dated)."""
     if not table or len(table) < 2 or len(table[0]) < 2:
         return None
-    label_col, value_col = list(table[0])[:2]
+    picked = _chart_columns(table)
+    if not picked:
+        return None
+    label_col, value_col = picked
     rows = [{"label": str(r[label_col]), "value": _num(r[value_col])} for r in table]
-    if all(r["value"] is None for r in rows) or any(
-            r[value_col] is not None and _num(r[value_col]) is None for r in table):
+    if all(r["value"] is None for r in rows):
         return None
     is_time = any(word in label_col.upper() for word in TIME_WORDS)
     if sort and not is_time:
@@ -386,6 +424,21 @@ def _chart(table: list, total, title, keys: list, single: bool, sort: bool):
     return {"rows": _chart_window(label_col, rows), "total": total, "kind": "columns" if is_time else "bars",
             "format": _value_format(value_col, keys, single), "axis": label_col.replace("_", " ").capitalize(),
             "title": title or f"{value_col.replace('_', ' ').capitalize()} by {label_col.replace('_', ' ').lower()}"}
+
+
+GRID_ROWS = 10  # a result table on the card shows this many rows (the agent ranks top 10)
+
+
+def _grid(table: list, total, title) -> dict:
+    """A result table for the answer card: the first GRID_ROWS rows, every column, each with
+    a format (a contract metric's, a plain number, or text for names and IDs)."""
+    cols = list(table[0])
+    by_col = {_metric_col(k): config.METRICS[k]["format"] for k in config.METRICS}  # only a named metric is formatted as one
+    formats = {c: "text" if _ID_COL.search(c) or not _numeric(table, c) else by_col.get(c.upper(), "number") for c in cols}
+    return {"title": title or "", "total": total or len(table),
+            "columns": [{"label": c.replace("_", " ").capitalize(), "format": formats[c]} for c in cols],
+            "rows": [[_num(r.get(c)) if formats[c] != "text" else ("" if r.get(c) is None else str(r.get(c)))
+                      for c in cols] for r in table[:GRID_ROWS]]}
 
 
 def answer(question: str, result: dict, part: str = "") -> dict:
@@ -398,9 +451,14 @@ def answer(question: str, result: dict, part: str = "") -> dict:
     titles = result.get("table_titles") or [None] * len(tables)  # the agent's own titles (art 07)
     # an instant answer that isn't ranked is drawn highest first; the agent's order is kept
     sort = instant and not (result.get("raw") or {}).get("ranked")
-    charts = [c for c in (_chart(t, n, title, keys, len(tables) == 1, sort)
-                          for t, n, title in zip(tables, counts, titles)) if c][:MAX_CHARTS]
+    single = len(tables) == 1
+    drawn = [(t, n, title, _chart(t, n, title, keys, single, sort)) for t, n, title in zip(tables, counts, titles)]
+    charts = [c for *_, c in drawn if c][:MAX_CHARTS]
     chart = charts[0] if charts else None
+    # 2 Oct: rows that can't be charted (names only, a lookup) show as a table, so the data
+    # an answer is built on is always on the card, whatever the agent's text says
+    grids = [_grid(t, n, title) for t, n, title, c in drawn
+             if not c and t and not (len(t) == 1 and len(t[0]) == 1)][:MAX_CHARTS]
     return {
         "question": question, "part": part,
         # which path answered (C14): the instant shortcut or the agent
@@ -411,7 +469,7 @@ def answer(question: str, result: dict, part: str = "") -> dict:
         "metrics": [config.METRICS[k]["label"] for k in keys],
         "definitions": [{"label": config.METRICS[k]["label"], "formula": FORMULAS[k],
                          "definition": config.METRICS[k]["definition"], "id": config.METRICS[k]["id"]} for k in keys],
-        "semantic_view": config.SEMANTIC_VIEW, "chart": chart, "charts": charts,
+        "semantic_view": config.SEMANTIC_VIEW, "chart": chart, "charts": charts, "grids": grids,
         # what the agent used, in words ("Verified query" has its own chip)
         "tools": [x for x in result.get("tools_used") or [] if x != "Verified query"],
         "health": _health_note(result.get("data_health")),

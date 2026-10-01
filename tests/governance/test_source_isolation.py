@@ -20,6 +20,10 @@ NOT_QUERIES = {"pop_notices", "data_mode", "get_session", "validate", "default_w
                "agent_request",  # C6c: builds the bound JSON, sends nothing
                "add_notices", "agent_unavailable",  # C14: notice hand-off, error check
                "pem_text",  # C15 fix: cleans a pasted private key, no SQL
+               "set_visitor", "current_visitor", "query_tag",  # query labels, no SQL
+               "agent_run_url", "agent_stream_body", "sse_events", "assemble_stream",  # CR-008 helpers
+               "ask_agent_stream",  # CR-008: REST, no SQL of its own (its fallback is ask_agent)
+               "interrupted_result",  # review #12/#13: builds a result, no SQL
                "get_source_schema_summary"}  # static catalog in both modes (C02)
 
 

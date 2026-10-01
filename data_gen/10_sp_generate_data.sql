@@ -591,7 +591,12 @@ BEGIN
         -- lane (the plant's region, or CROSS). On time with p_ot (§3.5): ACT = PROM - 0..2,
         -- else PROM + 1..6; NULL while in transit (ACT > L). Costs in USD (§3.6), stored in
         -- USD for US plants, else the plant currency on 55% of shipments.
-        CREATE OR REPLACE TEMPORARY TABLE TMP_S AS
+        -- Two statements, not one (B13 fix, CoCo 2026-10-01): with dptbg computed in the same
+        -- query, the optimizer ran the carrier join below as a cartesian product (shipments x
+        -- carrier-days, 39.6 billion rows a year at SF 50) with the date as a post-filter.
+        -- Materializing the shipment rows first makes (lane, date) real hash-join keys.
+        -- Same rows, byte for byte.
+        CREATE OR REPLACE TEMPORARY TABLE TMP_S_L AS
         WITH g AS (SELECT DISTINCT n, werks FROM TMP_L WHERE is_shipped),
         sp AS (   -- part 1 always; part 2 on the 5% split (UNION ALL, not an OR join: see C08_run.md)
             SELECT g.n, g.werks, 1 AS part_no, SUBSTR(g.werks, 3)::NUMBER AS plant_num FROM g
@@ -614,12 +619,13 @@ BEGIN
                    BITAND(HASH(:SEED, 'VTTK', sp.n, sp.plant_num, sp.part_no, 'load'),    4294967295) / 4294967295.0 AS u_load
             FROM sp
             JOIN TMP_O o ON o.n = sp.n
-            JOIN TMP_PLANT pl ON pl.WERKS = sp.werks),
-        l AS (
-            SELECT u.*, CASE WHEN u.plant_region = u.cust_region THEN u.plant_region ELSE 'CROSS' END AS lane,
-                   u.plant_country = u.cust_country AS is_domestic
-            FROM u WHERE u.dptbg <= :l_date),
-        c AS (
+            JOIN TMP_PLANT pl ON pl.WERKS = sp.werks)
+        SELECT u.*, CASE WHEN u.plant_region = u.cust_region THEN u.plant_region ELSE 'CROSS' END AS lane,
+               u.plant_country = u.cust_country AS is_domestic
+        FROM u WHERE u.dptbg <= :l_date;
+
+        CREATE OR REPLACE TEMPORARY TABLE TMP_S AS
+        WITH c AS (
             SELECT l.*, cd.CARRIER_CD, cd.SLA + CASE WHEN l.lane = 'CROSS' THEN 5 ELSE 0 END AS sla_days,
                    cd.OT_OFF, cd.BASE_FREIGHT,
                    LEAST(0.97, GREATEST(0.70,
@@ -632,7 +638,7 @@ BEGIN
                         WHEN l.dptbg <= '2022-12-31'::DATE THEN 1.00 + 0.35 * DATEDIFF(day, '2021-07-01'::DATE, l.dptbg) / 548
                         WHEN l.dptbg <= '2023-12-31'::DATE THEN 1.35 - 0.25 * DATEDIFF(day, '2022-12-31'::DATE, l.dptbg) / 365
                         ELSE 1.10 END AS fuel
-            FROM l
+            FROM TMP_S_L l
             JOIN TMP_CARRIER_DAY cd ON cd.LANE = l.lane AND cd.d = l.dptbg
              AND cd.idx = LEAST(cd.cnt, 1 + FLOOR(l.u_car * cd.cnt))::INT),
         t AS (

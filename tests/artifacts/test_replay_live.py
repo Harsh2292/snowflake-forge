@@ -107,9 +107,18 @@ def test_whole_app_runs_live_and_labels_its_source(forge, monkeypatch):
     forge_data.pop_notices()
 
 
-def test_queries_are_tagged_per_path(forge):
-    forge_data._query_tag.update(path=None, enabled=True)
+def test_queries_are_tagged_per_path_and_visitor(forge):
+    """Rule 9 + "who asked what" (CoCo, 1 Oct): a label on every statement, never on the
+    shared session, with the visitor's anonymous id when there is one."""
+    session = forge_data.get_session()
+    forge_data.set_visitor(None)
     forge.get_metric("fill_rate", "parts.category")
-    assert forge_data.get_session().query_tag == "forge_app:get_metric"
+    assert session.tags[-1] == "forge_app:get_metric"
+    forge_data.set_visitor("3f9a1c2e")
     forge.compare_across_personas()
-    assert forge_data.get_session().query_tag == "forge_app:compare_across_personas"
+    assert session.tags[-3:] == ["forge_app:compare_across_personas:3f9a1c2e"] * 3
+    forge_data.set_visitor("Robert'); DROP")  # anything but 8 hex characters is ignored
+    forge.get_metric("fill_rate")
+    assert session.tags[-1] == "forge_app:get_metric"
+    assert session.query_tag is None  # the shared session is never relabelled
+    forge_data.set_visitor(None)

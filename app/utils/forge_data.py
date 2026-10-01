@@ -229,7 +229,6 @@ def _drop_session() -> bool:
     global _session
     with _session_lock:
         dead, _session = _session, None
-    _query_tag["path"] = None
     if dead is None or dead is _sis["session"]:
         return False
     try:
@@ -339,9 +338,9 @@ def _run(label: str, live_fn, mock_fn):
     """Mock mode → mock. Live mode → live, degrading to mock with a Notice on any failure."""
     if config.USE_MOCK_DATA:
         return _tag(mock_fn(), "mock")
+    _local.path = label.split("(")[0]
     for attempt in (1, 2):
         try:
-            _tag_queries(label.split("(")[0])
             return _tag(live_fn(), "live")
         except Exception as exc:  # the UI must never see a stack trace on stage
             # A long-lived public app outlives its login: log in again once, then give up.
@@ -351,28 +350,31 @@ def _run(label: str, live_fn, mock_fn):
             code = getattr(exc, "sql_error_code", None) or getattr(exc, "error_code", None)
             message = (str(exc).splitlines() or [type(exc).__name__])[0][:300]
             _notices().append(Notice(label, message, code))
-            log.warning("forge: live call %s failed, showing saved results: %s", label, message)
+            log.warning("forge[%s]: live call %s failed, showing saved results: %s",
+                        current_visitor() or "-", label, message)
             return _tag(mock_fn(), "mock_fallback")
 
 
-_query_tag = {"path": None, "enabled": True}
+# Query labels (core system rule 9, and "who asked what", CoCo 1 Oct): every query carries
+# forge_app:<function>:<visitor>, where <visitor> is a random 8-character id per browser
+# session (no personal data). Set per statement, not on the session: all visitors share one
+# session, and parallel queries would overwrite a session-wide label.
+_tags = {"enabled": True}
+_VISITOR = re.compile(r"^[0-9a-f]{8}$")
 
 
-def _tag_queries(path: str) -> None:
-    """Label the session's queries per app path (e.g. forge_app:get_metric), so query
-    history attributes credits to each path (core system rule 9). Owner's-rights apps may
-    refuse the session change; then tagging is switched off once, silently (verify at B15)."""
-    if not _query_tag["enabled"] or _query_tag["path"] == path:
-        return
-    try:
-        session = get_session()
-    except Exception:
-        return  # no session: the live call itself reports why
-    try:
-        session.query_tag = f"forge_app:{path}"
-        _query_tag["path"] = path
-    except Exception:
-        _query_tag["enabled"] = False
+def set_visitor(visitor_id) -> None:
+    """The current visitor for this thread's queries (streamlit_app.py, every run)."""
+    _local.visitor = visitor_id if isinstance(visitor_id, str) and _VISITOR.match(visitor_id) else None
+
+
+def current_visitor():
+    return getattr(_local, "visitor", None)
+
+
+def query_tag(path: str) -> str:
+    visitor = current_visitor()
+    return f"forge_app:{path}" + (f":{visitor}" if visitor else "")
 
 
 def _tag(result, source: str):
@@ -385,7 +387,17 @@ def _tag(result, source: str):
 
 def _query(sql: str, params=None) -> pd.DataFrame:
     # collect() rather than to_pandas(): to_pandas() rejects non-SELECT statements (CALL).
-    rows = get_session().sql(sql, params=params).collect()
+    statement = get_session().sql(sql, params=params)
+    if not _tags["enabled"]:
+        return pd.DataFrame([row.as_dict() for row in statement.collect()])
+    try:
+        rows = statement.collect(statement_params={"QUERY_TAG": query_tag(getattr(_local, "path", "query"))})
+    except Exception as exc:
+        if "query_tag" not in str(exc).lower():
+            raise
+        _tags["enabled"] = False  # an environment that refuses labels: run unlabelled from now on
+        log.warning("forge: query labels refused, running without them")
+        rows = get_session().sql(sql, params=params).collect()
     return pd.DataFrame([row.as_dict() for row in rows])
 
 
@@ -501,6 +513,156 @@ def ask_agent(question: str, role=None) -> dict:
         return parse_agent_response(json.loads(raw) if isinstance(raw, str) else raw)
 
     return _run("ask_agent", live, lambda: parse_agent_response(_mock_agent_raw(question)))
+
+
+# ── Streaming the agent (CR-008, contract §5.3b; docs/references/agent_run_rest.md) ──
+
+class AgentStreamError(RuntimeError):
+    """The stream couldn't be used (no token, an HTTP error): fall back to §5.3."""
+
+
+class StreamInterrupted(AgentStreamError):
+    """The stream started, then failed (an error event, the network, no final response).
+    The agent has already run and been paid for, so there's no second call (review #12):
+    the visitor keeps what was written, marked incomplete, and nothing is cached (#13)."""
+
+    def __init__(self, message: str, text: str = ""):
+        super().__init__(message)
+        self.text = text
+
+
+INTERRUPTED_NOTE = "The answer was interrupted before it finished: this is what was written."
+
+
+def interrupted_result(text: str) -> dict:
+    result = paused_result()  # the empty parsed shape
+    result.update(answer=text.strip() or "The agent's answer was interrupted before any text arrived.",
+                  status="incomplete", warnings=[{"message": INTERRUPTED_NOTE}])
+    return result
+
+
+def agent_run_url(host: str) -> str:
+    database, schema, name = config.AGENT.split(".")
+    return f"https://{host}/api/v2/databases/{database}/schemas/{schema}/agents/{name}:run"
+
+
+def agent_stream_body(question: str) -> dict:
+    """The §5.3 messages (CR-007's JSON), with "stream": true."""
+    return {**json.loads(agent_request(question)), "stream": True}
+
+
+def sse_events(lines):
+    """(event, data) pairs from Server-Sent Event lines: `event:` / `data:` fields, a blank
+    line dispatches, `:` starts a comment, several data lines join with a newline."""
+    event, data = None, []
+    for raw in lines:
+        line = (raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)).rstrip("\r\n")
+        if not line:
+            if data:
+                yield event or "message", "\n".join(data)
+            event, data = None, []
+            continue
+        if line.startswith(":"):
+            continue
+        field, _, value = line.partition(":")
+        value = value[1:] if value.startswith(" ") else value
+        if field == "event":
+            event = value
+        elif field == "data":
+            data.append(value)
+    if data:
+        yield event or "message", "\n".join(data)
+
+
+# Content blocks the stream announces one by one, as the final response holds them.
+_STREAM_ITEMS = {"response.text": "text", "response.tool_use": "tool_use",
+                 "response.tool_result": "tool_result", "response.table": "table"}
+
+
+def assemble_stream(events, on_text, on_status=None) -> dict:
+    """The agent's raw response from its events: text deltas go to on_text as they arrive,
+    and the final `response` event is the whole response, the same shape DATA_AGENT_RUN
+    returns. Without it the run didn't finish: StreamInterrupted, with the text so far."""
+    items, final, written = [], None, []
+    for event, data in events:
+        try:
+            payload = json.loads(data) if data else {}
+        except ValueError:
+            continue  # a keep-alive or a line we don't know: skip it, as the docs require
+        if event == "response.text.delta":
+            if payload.get("text"):
+                written.append(payload["text"])
+                on_text(payload["text"])
+        elif event == "response.status":
+            if on_status and payload.get("message"):
+                on_status(payload["message"])
+        elif event in _STREAM_ITEMS:
+            kind = _STREAM_ITEMS[event]
+            items.append({"type": "text", "text": payload.get("text", "")} if kind == "text" else {"type": kind, kind: payload})
+        elif event == "response":
+            final = payload
+        elif event == "error":
+            raise StreamInterrupted(f"agent error event: {payload.get('code')} {payload.get('message')}", "".join(written))
+    if final is None:  # no terminal `response` event: never presented as a complete answer
+        raise StreamInterrupted("the stream ended without its final response", "".join(written))
+    return final
+
+
+def _stream_live(question: str, on_text, on_status=None) -> dict:
+    import requests  # a Streamlit dependency; imported here so the module loads without it
+    connection = get_session().connection
+    token, host = getattr(getattr(connection, "rest", None), "token", None), getattr(connection, "host", None)
+    if not token or not host:
+        raise AgentStreamError("no session token to reuse (SiS warehouse runtime, or not logged in)")
+    response = requests.post(
+        agent_run_url(host), json=agent_stream_body(question), stream=True,
+        timeout=(10, config.STATEMENT_TIMEOUT_SECONDS),
+        headers={"Authorization": f'Snowflake Token="{token}"', "Content-Type": "application/json",
+                 "Accept": "text/event-stream"})
+    with response:
+        if response.status_code != 200:
+            raise AgentStreamError(f"HTTP {response.status_code}: {response.text[:300]}")
+        written = []
+
+        def keep(text):
+            written.append(text)
+            on_text(text)
+
+        try:
+            return assemble_stream(sse_events(response.iter_lines()), keep, on_status)
+        except StreamInterrupted:
+            raise
+        except Exception as exc:  # the network dropped mid-stream: the agent already ran
+            raise StreamInterrupted(f"{type(exc).__name__}: {exc}", "".join(written)) from None
+
+
+def ask_agent_stream(question: str, on_text=None, on_status=None) -> dict:
+    """ask_agent, streamed (CR-008): the answer text goes to on_text as the agent writes it,
+    on the app's own session (its token, no second login). A failure before the stream
+    starts falls back to the §5.3 call, ask_agent(), which also decides "paused" and saved
+    results; once it has started, an interruption keeps what was written (no second paid
+    call, review #12) and is marked incomplete (never cached, #13). Mock mode has
+    nothing to stream. on_status gets the agent's own progress messages ("Planning…").
+    A Stop click raises Streamlit's BaseException-based rerun inside a callback: it isn't
+    caught here, so the stream simply ends (the request closes with it)."""
+    if config.USE_MOCK_DATA:
+        return ask_agent(question)
+    _local.path = "ask_agent_stream"
+    try:
+        result = parse_agent_response(_stream_live(question, on_text or (lambda text: None), on_status))
+    except Exception as exc:  # the UI must never see a stack trace on stage
+        if agent_unavailable(exc):
+            log.warning("forge[%s]: the agent is not available to this role; Ask is paused", current_visitor() or "-")
+            return _tag(paused_result(), "live")
+        if isinstance(exc, StreamInterrupted):
+            log.warning("forge[%s]: the agent's stream was interrupted, keeping the partial answer: %s",
+                        current_visitor() or "-", str(exc)[:300])
+            return _tag(interrupted_result(exc.text), "live")
+        message = (str(exc).splitlines() or [type(exc).__name__])[0][:300]
+        log.warning("forge[%s]: streaming the agent failed, using DATA_AGENT_RUN: %s", current_visitor() or "-", message)
+        return ask_agent(question)
+    result["streamed"] = True
+    return _tag(result, "live")
 
 
 def agent_unavailable(exc: Exception) -> bool:

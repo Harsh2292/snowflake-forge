@@ -464,6 +464,8 @@ in `quality/`); CoCo runs it and wires it up.**
   - `SP_DATA_HEALTH` returns the B8b shape for every entity
 
 ### B12a — Freshness fixes: reference data + a nightly day-append (Day 3, user-approved 30 Sep)
+**✅ Done 1 Oct**: part 1 (C16, 30 Sep) + part 2 (C17b run; nightly task `OPS.FORGE_NIGHTLY_APPEND`
+05:30 UTC, `sql/06_ops/05`; `runs/C17b_run.md`). The gate's "morning after" check is 2 Oct.
 Card `coco/B12a_freshness.md` (write it when Claude Code's files land). Spec: DATA_SPEC §7.2
 "Status rules" and §7.1a. Claude Code writes the SQL (C10 add-on in `quality/`,
 `SP_APPEND_DAY` in `data_gen/`); CoCo runs it and schedules it.
@@ -480,6 +482,9 @@ Card `coco/B12a_freshness.md` (write it when Claude Code's files land). Spec: DA
   - persona equality still holds (art 09 query)
 
 ### B13 — Scale proof (Day 3)
+**⏹ Stopped 1 Oct by the user** (close-out; art 12 isn't in the demo): `sf1-xs` 70/70; SF 50
+(102M order lines) loaded in 6.5 min after fixing a cartesian join in the generator; clone runs
+and art 12 not done; clone dropped. `docs/artifacts/runs/B13_partial_run.md`.
 Card `coco/B13_scale_proof.md`. **Claude Code writes the harness (C12, in `tests/scale/`);
 CoCo runs it.**
 - [ ] Zero-copy clone of the database, plus a temporary larger warehouse capped by a
@@ -502,6 +507,10 @@ CoCo runs it.**
 ## M6 — Production
 
 ### B14 — Contract audit + security review (Day 3)
+**✅ Done 1 Oct** (card `coco/B14_security_ops.md`, art `11_contract_audit.md`): live audit 148/148
+as admin and as the app user; Guardrails, app auth policy, ops views, hourly alert; adversarial
+eval 10/10. **Review fixes 1 Oct late** (C-1..C-4, CR-009 v1.8, the 3 lock rows; art 11 F8/F9;
+`runs/B14_review_fixes_run.md`).
 Card `coco/B14_audit.md`. Old B13 + old B17. **Claude Code refreshes the live tests for the
 new data and CR-006 (C13); CoCo runs them** (`pytest -m live`, with Snowpark installed in the
 venv) as the contract check, then adds anything the tests don't cover:
@@ -521,6 +530,9 @@ venv) as the contract check, then adds anything the tests don't cover:
       `CONTRACT.md` §11 with the user notified
 
 ### B15 — Production hardening + deploy (Day 3)
+**✅ Done 1 Oct** (card `coco/B15_final_checks.md`): the public link
+<https://supply-chain-forge.streamlit.app/> is live on the event account; final checks and cost
+($391.13 left). Left: the 2 Oct check of the first nightly run; a live check of CR-008.
 **The submitted Prototype Deployed Link is the Streamlit Community Cloud app, live on the new
 account (ADR-009, trial in B15a).** At cutover: re-run
 `sql/05_app_access/01_app_service_user.sql` in the new account and switch the Community Cloud

@@ -3,7 +3,7 @@
 > **Single source of truth for "what's next".** Read this, open the named card, execute it.
 > Whichever agent finishes a card updates this file.
 
-**Last updated**: 2026-09-30 evening (CoCo: C16 run done, B09a done, **B08m done: everything now runs in the new account `QURFOQP-XU04029`**; next: secrets + B15a, then C17, B14, B15, see "CoCo → NEXT SESSION STARTS HERE") · **Contract**: **v1.6** (CR-007 accepted and applied 2026-09-30) · **Branch**: `development`
+**Last updated**: 2026-10-01 late evening (CoCo close-out: **review fixes C-1..C-4 done, contract v1.8 (CR-009), every lock row run, B13 stopped by the user**; nothing left but the 2 Oct checks) · **Contract**: **v1.8** · **Branch**: `development`
 
 > **DEADLINE (from the user): submission 4 Oct 2026. Everything done by end of 2 Oct.**
 > Day 1 = 29 Sep · Day 2 = 30 Sep · Day 3 = 1 Oct · **2 Oct = buffer, fixes, rehearsal,
@@ -16,6 +16,92 @@
 > which starts with the 9 core system rules. The post-hackathon work is in `docs/ROADMAP.md`.
 
 ---
+
+## ⏹ CLOSED (2026-10-01, the user's decision): the build is finished
+
+The user stopped development here. The UI was checked locally (mock data): "looks good".
+
+**Before submission (the user, ~10 min):**
+1. Push to `main`: Community Cloud deploys it; until then the link runs without the 1 Oct work.
+2. Set the repo variable `PUBLIC_APP_URL` (RUNBOOK §5) so keep-awake stops the app sleeping.
+3. After the redeploy, open the link: the tag reads Live; ask one question (streaming has never
+   been checked live; if Snowflake refuses it, Ask falls back to `DATA_AGENT_RUN` on its own).
+4. Keep `~/forge-keys` somewhere safe, out of the repo. Don't delete it: it's the app's only
+   private key, and the public link needs it if the Community Cloud secrets are ever reset.
+
+**After judging:** ask CoCo to suspend `OPS.FORGE_NIGHTLY_APPEND` and the alerts (≈0.03 credits a day).
+
+**Done after the close (CoCo, 1 Oct late evening, the user: "complete everything"):** C-1..C-4
+(CR-009 accepted, contract v1.8), the three lock rows, a generator fix found at B13. Every output
+is byte-identical; live 148/148. Reports: `runs/B14_review_fixes_run.md`, `runs/B13_partial_run.md`.
+Claude Code: `MASKING_MATRIX` + governance tests for `V_SUPPLIER.email`; the `FX_MISSING` DQ
+check (HANDOFF, "CoCo close-out").
+
+**Left undone on purpose (no effect on the demo or the link):**
+- B13 / art 12 (scale proof): stopped by the user; SF 50 load proven (102M lines), clone dropped
+- the CR-008 live check
+- the response-format and guardrails messages
+- the ~5% extra orders on appended weekdays
+- C05: the demo script, talking points and scalability doc (the README covers the story)
+
+---
+
+## 1 Oct (Claude Code): public link LIVE; fixes since
+
+- ✅ **https://supply-chain-forge.streamlit.app is Live.** All 6 screens checked; the tag reads
+  Live, no fallback. The key pair was made by Claude Code in `~/forge-keys` (outside the repo),
+  and the user set the public key on `FORGE_APP_SVC`.
+- ✅ **Pasted keys are repaired** (`forge_data.pem_text`), with errors that name the cause.
+- ✅ **CoCo point 2:** per-statement `QUERY_TAG forge_app:<function>:<visitor>`.
+- ✅ **The cold-load freeze (5–6 min on the first visit after a restart) is fixed:** Explore's
+  and Same's queries now run in parallel.
+- ✅ **Ask redesign (the user's request):**
+  - earlier questions fold into rows ("Instant · 0.4 s ▾"); a click opens the answer under its
+    row, one at a time; the newest answer stays open
+  - the input is a rounded bar, readable in dark mode (it was white with light text)
+  - fixed: "by year quarter" now reads "by quarter"; the one-line card no longer scrolls
+  - `pytest -m ui` 30/30
+- ✅ **Ask round 2 (the user's screenshots):**
+  - a "Thinking…" card inside the conversation (the spinner sat outside it)
+  - question line breaks are kept
+  - the router splits on line breaks and `?"`
+  - every chartable table gets a chart
+  - charts redesigned: horizontal bars in the Explore style, periods as thin columns
+  - asked CoCo to label the parts of multi-part agent answers (HANDOFF)
+  - `pytest -q` 739; Ask UI tests 10/10
+- 👤 **User:**
+  - push the changes (Community Cloud redeploys `main`)
+  - set the repo variable `PUBLIC_APP_URL` (RUNBOOK §5) so keep-awake warms the caches every 6 h
+  - delete or vault `~/forge-keys`
+- ✅ **C17 part B READY (1 Oct):** `data_gen/40_sp_append_day.sql` is in the handoff lock (99_run Step 3:
+  clone, then production, then CoCo's nightly task). Critical path: Data health turns WARN from
+  1 Oct ~17:00 UTC until it runs
+- ✅ **Adversarial eval READY (1 Oct):** A01–A10, the `SAFE` behaviour and `EVAL_GUARDS` are in the lock
+  (eval/99_run Step 5, label `b14-adv`)
+- ✅ **CR-008 streaming built (1 Oct, card C18):** Ask streams single agent answers on the session token, with
+  `DATA_AGENT_RUN` as the fallback, plus a "Stream answers" switch, a Stop button and the agent's live
+  status line. CoCo: live check (token accepted under the auth policy?) and the response-format ask
+- ✅ **The outside review (1 Oct, the user's ask):** all 21 findings checked against the code
+  first (wrong: 1, 14; partly true: 6, 7, 16, 17, 19, 21). My 14 fixes are done:
+  - #15, #5, #12, #13, #8, #9, #17, #2, #10 in the app
+  - #18 deploy exclusions, #19 keep-awake, #16 README
+  - #1: not reproducible, now a regression test
+  - `pytest -q` 799 passed; `pytest -m ui` 30/30
+
+  CoCo's four (C-1..C-4) went to CoCo through the user. CR-009 (mask supplier e-mail) is
+  **waiting for the user's yes or no**.
+- ✅ **C17b and the adversarial eval are DONE (CoCo):** production catches up nightly at 05:30 UTC;
+  adversarial 10/10.
+- 🔒 **In the lock (1 Oct):**
+  - `data_gen/30_sp_gen_self_checks.sql`: CoCo's C17b ask; the checks learn about appended days
+  - `quality/30` (#11) and `eval/20` (#20): re-create, then the `b14-adv-2` re-run
+- 🔎 **Open (Claude Code, test days):** new orders on appended weekdays run ~5% above history
+  (355 vs 337–339, `runs/C17b_run.md` §3d). Not blocking.
+- ⏭ **Claude Code next:**
+  1. docs (point 4)
+  2. the guardrails message (point 3, when CoCo's artifact lands)
+  3. C05 (demo script, talking points, scalability doc)
+  4. the 2-day judge-style testing with the user
 
 ## ✅ 1 Oct (Claude Code): README written (part of C05)
 `README.md` at the repo root covers:
@@ -229,12 +315,22 @@ of the fallback banner. ✅ Built in C14 (30 Sep).
   checks on the public link.
 
 **Order for the next session** (all in the new account `QURFOQP-XU04029`; its connection should
-be the active one, and pass `connection='QURFOQP-XU04029'` on every SQL call anyway):
+be the active one, and pass `connection='QURFOQP-XU04029'` on every SQL call anyway).
+**Status 1 Oct late evening: closed.** Every card is done; B13 was stopped by the user. What's left:
+1. **2 Oct after 05:30 UTC:** check `FORGE_NIGHTLY_APPEND` in `TASK_HISTORY` (SUCCEEDED) and
+   `SP_DATA_HEALTH('ALL')` (OK, as-of 2026-10-01). Card `B15_final_checks.md`.
+2. **When Claude Code ships CR-008 (streaming):** check it on the public link (time to first
+   text; the same final answer as `DATA_AGENT_RUN` on the 8 canonical questions).
+3. ~~The handoff lock~~: empty (all rows DONE 1 Oct; C12 PARTIAL).
+4. ~~B13~~: stopped by the user (`runs/B13_partial_run.md` has the steps to finish it later).
+5. **After judging:** suspend `OPS.FORGE_NIGHTLY_APPEND` and `OPS.FORGE_OPS_WATCH`.
+
+Earlier items in this list, done 1 Oct:
 1. Tell the user the Community Cloud secrets values (B08m card, "After the gate").
 2. **B15a:** key ✅ and live suite as the app role ✅ (1 Oct). Left: once the user's Community
    Cloud app exists, the RUNBOOK §4 checks on the public link (Ask included).
-3. **B12a part 2:** Claude Code's C17 day-append when it's in the lock (**critical path**: the
-   daily tables read WARN from 1 Oct ~17:00 UTC), then the nightly task with the UTC date.
+3. **B12a part 2 ✅ 1 Oct** (C17b, nightly task 05:30 UTC). Next morning: check the 2 Oct
+   05:30 run in `TASK_HISTORY` and that data health stays OK.
 4. **B14:** hardening ✅ 1 Oct (Guardrails, app auth policy, ops views, hourly e-mail alert:
    `sql/06_ops/`, card `B14_security_ops.md`) and live audit ✅ 148/148. Left: the security
    review write-up → art 11.
@@ -419,12 +515,12 @@ No-collision rules (one owner per file; the handoff lock; interfaces fixed first
 | B09a | Verified queries for the C11 misses + agent speed (reduced: no generator, no name search) | ✅ 30 Sep: 2 verified queries (14 in all) + agent without `data_to_chart`; `b10-v2` in the new account **28/30, p50 12.3 s** (card `B09a_verified_queries_speed.md`) |
 | B10 | Cortex Agent (Analyst + chart + data-health tool); run C11 → art 07, 08 (Day 2) | ✅ 30 Sep, gate 6/6: 27/30 on C11; CR-007 proposed |
 | B12 | Run C10 (DMFs + `SP_DATA_HEALTH`) → art 10 (Day 2) | ✅ 30 Sep, gate 6/6: 77 DMFs live, self-checks 90/91 |
-| B12a | Freshness fixes: reference data + nightly day-append (Day 3) | 🔄 **Part 1 ✅ 30 Sep** (C16: 93/93, ALL OK, art 10 re-captured). Part 2 (C17 + nightly task) in the new account, when C17 is in the lock (critical: WARN from 1 Oct ~17:00 UTC) |
+| B12a | Freshness fixes: reference data + nightly day-append (Day 3) | ✅ 1 Oct: part 1 (C16) + part 2 (C17b run, production caught up, data health OK, nightly task `OPS.FORGE_NIGHTLY_APPEND` 05:30 UTC; `runs/C17b_run.md`) |
 | B08m | Move to the event account (cutover now, user decision 30 Sep) | ✅ 30 Sep evening: replayed with no hand fix, data byte-identical, numbers match, 93/93, eval 28/30. **All work continues in `QURFOQP-XU04029`** (`runs/B08m_run.md`) |
-| B13 | Run C12 scale harness on a clone → art 12 (Day 3, old account) | ⬜ C12 READY; clone tests must re-create the clone's DTs (they read the original database) |
-| B14 | Run C13 live tests + security review → art 11 (2 Oct, new account) | 🔄 1 Oct: live audit 148/148 (admin + app user); Guardrails, app auth policy, ops views, hourly alert (`sql/06_ops/`). Left: art 11 write-up |
-| B15a | Public live link trial on Streamlit Community Cloud (Day 2, old account; ADR-009) | 🔄 1 Oct: key set on `FORGE_APP_SVC` (fingerprint matches), live suite as the app user 148/148. Left: the user's Community Cloud app → RUNBOOK §4 on the public link |
-| B15 | Cost controls + deploy (2 Oct, new account): the Community Cloud link is the submitted one | ⬜ |
+| B13 | Run C12 scale harness on a clone → art 12 (Day 3, old account) | ⏹ Stopped 1 Oct by the user: `sf1-xs` 70/70; SF 50 loaded (102M lines) after a generator fix; art 12 not written; `runs/B13_partial_run.md` |
+| B14 | Run C13 live tests + security review → art 11 (2 Oct, new account) | ✅ 1 Oct: live audit 148/148 (admin + app user); Guardrails, app auth policy, ops views, hourly alert (`sql/06_ops/`); adversarial eval 10/10; **art 11 written** (`11_contract_audit.md`) |
+| B15a | Public live link trial on Streamlit Community Cloud (Day 2, old account; ADR-009) | ✅ 1 Oct: <https://supply-chain-forge.streamlit.app/> live on the new account (the user confirmed "Live"); every screen queried as `FORGE_APP_SVC`, 0 failures; Ask reached the agent. Key rotated, old key rejected |
+| B15 | Cost controls + deploy (2 Oct, new account): the Community Cloud link is the submitted one | ✅ 1 Oct (card `B15_final_checks.md`): final checks + cost ($391.13 left). Left: the 2 Oct check of the first nightly run; a live check of CR-008 streaming |
 | — | Stretch: governed splitter for the router, lineage trace | ⬜ only if time is left |
 
 Removed on 2026-09-29: B07c and the old B14 (MCP dropped), B11 (merged into B09), B16

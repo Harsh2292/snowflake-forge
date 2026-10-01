@@ -9,6 +9,10 @@
 --             per check, for the latest completed SP_GENERATE_DATA run on TARGET_DB and the
 --             SP_INJECT_MESS run after it (if any). PASSED is NULL for report-only rows
 --             (M05 currency shares, APAC share, a checksum with no earlier run to compare).
+--             Days appended by SP_APPEND_DAY (C17 part B, 40_sp_append_day.sql) load after the
+--             generator's END_DATE 05:00. The injection cross-checks count only the
+--             generator's own load (LOAD_TS <= that cap); APPEND_ROWS checks the appended rows
+--             against SP_APPEND_DAY's log, and LOAD_TS_CAP moves to the last appended day.
 -- Expected:   every row PASSED = TRUE or NULL.
 -- ============================================================================
 
@@ -28,6 +32,8 @@ DECLARE
     sf          FLOAT;
     gen_seed    NUMBER;
     gen_end     DATE;
+    gen_cap     TIMESTAMP_NTZ;
+    app_end     DATE;
     rs          RESULTSET;
 BEGIN
     SELECT COALESCE(REGEXP_LIKE(:TARGET_DB, '^[A-Za-z_][A-Za-z0-9_$]*$'), FALSE) INTO :ok_name;
@@ -51,6 +57,17 @@ BEGIN
     WHERE l.TARGET_DB = :TARGET_DB AND l.STAGE = 'start' AND l.PARAMS:procedure::VARCHAR = 'SP_INJECT_MESS'
       AND l.STARTED_AT > :gen_ts
       AND EXISTS (SELECT 1 FROM SUPPLY_CHAIN_FORGE.OPS.GEN_LOG d WHERE d.RUN_ID = l.RUN_ID AND d.STAGE = 'done');
+
+    -- C17 part B: the generator's load ends at END_DATE 05:00; SP_APPEND_DAY's days come after.
+    -- Its log rows are written in each day's transaction, so they match what was committed
+    -- (CHUNK = the business date; that day's rows load by 05:00 the next day).
+    gen_cap := TIMESTAMPADD(hour, 5, gen_end::TIMESTAMP_NTZ);
+    SELECT DATEADD(day, 1, MAX(TRY_TO_DATE(a.CHUNK))) INTO :app_end
+    FROM SUPPLY_CHAIN_FORGE.OPS.GEN_LOG a
+    JOIN SUPPLY_CHAIN_FORGE.OPS.GEN_LOG s
+      ON s.RUN_ID = a.RUN_ID AND s.STAGE = 'start' AND s.PARAMS:procedure::VARCHAR = 'SP_APPEND_DAY'
+     AND s.TARGET_DB = :TARGET_DB AND s.STARTED_AT > :gen_ts
+    WHERE a.STAGE = 'append';
 
     CREATE OR REPLACE TEMPORARY TABLE TMP_CHECKS (
         CHECK_ID VARCHAR, TABLE_NAME VARCHAR, EXPECTED FLOAT, ACTUAL FLOAT, TOLERANCE FLOAT, PASSED BOOLEAN, DETAIL VARCHAR);
@@ -171,16 +188,16 @@ BEGIN
         c AS (
             SELECT 'DUPLICATE_KEYS' AS id, 'VBAK' AS t,
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE IN ('M01', 'M02') AND TABLE_NAME = 'VBAK') AS e,
-                   (SELECT COUNT(*) - COUNT(DISTINCT VBELN) FROM ERP_SOURCE.VBAK) AS a
+                   (SELECT COUNT(*) - COUNT(DISTINCT VBELN) FROM ERP_SOURCE.VBAK WHERE LOAD_TS <= :gen_cap) AS a
             UNION ALL SELECT 'DUPLICATE_KEYS', 'VTTK',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE IN ('M01', 'M02') AND TABLE_NAME = 'VTTK'),
-                   (SELECT COUNT(*) - COUNT(DISTINCT TKNUM) FROM TMS_SOURCE.VTTK)
+                   (SELECT COUNT(*) - COUNT(DISTINCT TKNUM) FROM TMS_SOURCE.VTTK WHERE LOAD_TS <= :gen_cap)
             UNION ALL SELECT 'DUPLICATE_KEYS', 'VBAP',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'M01' AND TABLE_NAME = 'VBAP'),
-                   (SELECT COUNT(*) - COUNT(DISTINCT LINE_ID) FROM ERP_SOURCE.VBAP)
+                   (SELECT COUNT(*) - COUNT(DISTINCT LINE_ID) FROM ERP_SOURCE.VBAP WHERE LOAD_TS <= :gen_cap)
             UNION ALL SELECT 'DUPLICATE_KEYS', 'MARD',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'M01' AND TABLE_NAME = 'MARD'),
-                   (SELECT COUNT(*) - COUNT(DISTINCT INV_KEY) FROM WMS_SOURCE.MARD)
+                   (SELECT COUNT(*) - COUNT(DISTINCT INV_KEY) FROM WMS_SOURCE.MARD WHERE LOAD_TS <= :gen_cap)
             UNION ALL SELECT 'DUPLICATE_KEYS', 'KNA1',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'M01' AND TABLE_NAME = 'KNA1'),
                    (SELECT COUNT(*) - COUNT(DISTINCT KUNNR) FROM ERP_SOURCE.KNA1)
@@ -189,24 +206,29 @@ BEGIN
             UNION ALL SELECT 'TEST_MASTERS', 'MARA', 4, (SELECT COUNT(*) FROM SRM_SOURCE.MARA WHERE MATNR LIKE 'MAT9999%')
             UNION ALL SELECT 'MISSING_PROMISED_DATE', 'VTTK',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'E01'),
-                   (SELECT COUNT(DISTINCT TKNUM) FROM TMS_SOURCE.VTTK WHERE PROM_DLV_DT IS NULL)
+                   (SELECT COUNT(DISTINCT TKNUM) FROM TMS_SOURCE.VTTK WHERE PROM_DLV_DT IS NULL AND LOAD_TS <= :gen_cap)
             UNION ALL SELECT 'ORPHAN_LINES', 'VBAP',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'E09a'),
                    (SELECT COUNT(DISTINCT l.LINE_ID) FROM ERP_SOURCE.VBAP l
-                    WHERE NOT EXISTS (SELECT 1 FROM ERP_SOURCE.VBAK o WHERE UPPER(TRIM(o.VBELN)) = UPPER(TRIM(l.VBELN))))
+                    WHERE l.LOAD_TS <= :gen_cap AND NOT EXISTS (SELECT 1 FROM ERP_SOURCE.VBAK o WHERE UPPER(TRIM(o.VBELN)) = UPPER(TRIM(l.VBELN))))
             UNION ALL SELECT 'ORPHAN_SHIPMENTS', 'VTTK',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'E09b'),
                    (SELECT COUNT(DISTINCT s.TKNUM) FROM TMS_SOURCE.VTTK s
-                    WHERE NOT EXISTS (SELECT 1 FROM ERP_SOURCE.VBAK o WHERE UPPER(TRIM(o.VBELN)) = UPPER(TRIM(s.VBELN))))
+                    WHERE s.LOAD_TS <= :gen_cap AND NOT EXISTS (SELECT 1 FROM ERP_SOURCE.VBAK o WHERE UPPER(TRIM(o.VBELN)) = UPPER(TRIM(s.VBELN))))
             UNION ALL SELECT 'FUTURE_DATED_ORDERS', 'VBAK',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'E12'),
-                   (SELECT COUNT(DISTINCT VBELN) FROM ERP_SOURCE.VBAK WHERE AUDAT > LOAD_TS::DATE)
+                   (SELECT COUNT(DISTINCT VBELN) FROM ERP_SOURCE.VBAK WHERE AUDAT > LOAD_TS::DATE AND LOAD_TS <= :gen_cap)
             UNION ALL SELECT 'NON_CONTRACT_CODES', 'VBAK.GBSTK',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'M03' AND TABLE_NAME = 'VBAK.GBSTK'),
-                   (SELECT COUNT(*) FROM ERP_SOURCE.VBAK WHERE GBSTK NOT IN ('OPEN', 'SHIPPED', 'DELIVERED', 'CANCELLED'))
+                   (SELECT COUNT(*) FROM ERP_SOURCE.VBAK
+                    WHERE GBSTK NOT IN ('OPEN', 'SHIPPED', 'DELIVERED', 'CANCELLED') AND LOAD_TS <= :gen_cap)
+            -- CARRIER_CD counts each row once without LOAD_TS: M01 (after M03) re-sends identical
+            -- copies of rows that may carry a variant (C08 run: +1,260 over the log).
             UNION ALL SELECT 'NON_CONTRACT_CODES', 'VTTK.CARRIER_CD',
                    (SELECT SUM(AFFECTED_ROWS) FROM lg WHERE CODE = 'M03' AND TABLE_NAME = 'VTTK.CARRIER_CD'),
-                   (SELECT COUNT(*) FROM TMS_SOURCE.VTTK WHERE CARRIER_CD NOT IN ('DHL_EXPRESS', 'FEDEX_FREIGHT',
+                   (SELECT COUNT(DISTINCT HASH(TKNUM, VBELN, WERKS, CARRIER_CD, DPTBG, PROM_DLV_DT, ACT_DLV_DT,
+                                               FREIGHT_AMT, DUTY_AMT, HANDLING_AMT, SHP_STATUS, WAERS))
+                    FROM TMS_SOURCE.VTTK WHERE LOAD_TS <= :gen_cap AND CARRIER_CD NOT IN ('DHL_EXPRESS', 'FEDEX_FREIGHT',
                         'MAERSK_LOGISTICS', 'KUEHNE_NAGEL', 'DB_SCHENKER', 'UPS_SUPPLY_CHAIN', 'XPO_LOGISTICS',
                         'CEVA_LOGISTICS', 'FLEXPORT')))
         SELECT 'DATA_' || c.id, c.t, c.e, c.a,
@@ -214,19 +236,43 @@ BEGIN
                -- M01 copies of already-changed rows can add a few; allow 2% on those checks
                ABS(c.a - c.e) <= CASE WHEN c.id IN ('DUPLICATE_KEYS', 'NON_CONTRACT_CODES', 'MISSING_PROMISED_DATE')
                                       THEN 0.02 * c.e + 1 ELSE 0 END,
-               'expected from the injection log vs counted in the data'
+               'expected from the injection log vs counted in the generator''s load'
         FROM c;
 
-        -- No LOAD_TS after END_DATE 05:00 (§3.8).
+        -- No LOAD_TS after END_DATE 05:00 (§3.8), or after the last appended day's 05:00.
         INSERT INTO TMP_CHECKS
-        WITH cap AS (SELECT TIMESTAMPADD(hour, 5, :gen_end::TIMESTAMP_NTZ) AS ts),
+        WITH cap AS (SELECT TIMESTAMPADD(hour, 5, COALESCE(:app_end, :gen_end)::TIMESTAMP_NTZ) AS ts),
         x AS (
             SELECT 'VBAK' AS t, COUNT_IF(LOAD_TS > (SELECT ts FROM cap)) AS n FROM ERP_SOURCE.VBAK
             UNION ALL SELECT 'VBAP', COUNT_IF(LOAD_TS > (SELECT ts FROM cap)) FROM ERP_SOURCE.VBAP
             UNION ALL SELECT 'VTTK', COUNT_IF(LOAD_TS > (SELECT ts FROM cap)) FROM TMS_SOURCE.VTTK
             UNION ALL SELECT 'MARD', COUNT_IF(LOAD_TS > (SELECT ts FROM cap)) FROM WMS_SOURCE.MARD
             UNION ALL SELECT 'KNA1', COUNT_IF(LOAD_TS > (SELECT ts FROM cap)) FROM ERP_SOURCE.KNA1)
-        SELECT 'LOAD_TS_CAP', t, 0, n, 0, n = 0, 'rows loaded after END_DATE 05:00' FROM x;
+        SELECT 'LOAD_TS_CAP', t, 0, n, 0, n = 0,
+               'rows loaded after ' || COALESCE(:app_end, :gen_end) || ' 05:00'
+               || IFF(:app_end IS NULL, ' (END_DATE)', ' (the last appended day)') FROM x;
+    END IF;
+
+    -- 7. C17 part B: every row loaded after END_DATE 05:00 is one SP_APPEND_DAY logged.
+    IF (app_end IS NOT NULL) THEN
+        INSERT INTO TMP_CHECKS
+        WITH lg AS (
+            SELECT SPLIT_PART(a.TABLE_NAME, ' ', 1) AS t, SUM(a.ROWS_WRITTEN) AS e
+            FROM SUPPLY_CHAIN_FORGE.OPS.GEN_LOG a
+            JOIN SUPPLY_CHAIN_FORGE.OPS.GEN_LOG s
+              ON s.RUN_ID = a.RUN_ID AND s.STAGE = 'start' AND s.PARAMS:procedure::VARCHAR = 'SP_APPEND_DAY'
+             AND s.TARGET_DB = :TARGET_DB AND s.STARTED_AT > :gen_ts
+            WHERE a.STAGE = 'append'
+            GROUP BY 1),
+        x AS (
+            SELECT 'VBAK' AS t, COUNT_IF(LOAD_TS > :gen_cap) AS n FROM ERP_SOURCE.VBAK
+            UNION ALL SELECT 'VBAP', COUNT_IF(LOAD_TS > :gen_cap) FROM ERP_SOURCE.VBAP
+            UNION ALL SELECT 'VTTK', COUNT_IF(LOAD_TS > :gen_cap) FROM TMS_SOURCE.VTTK
+            UNION ALL SELECT 'MARD', COUNT_IF(LOAD_TS > :gen_cap) FROM WMS_SOURCE.MARD)
+        SELECT 'APPEND_ROWS', x.t, COALESCE(lg.e, 0), x.n, 0, x.n = COALESCE(lg.e, 0),
+               'rows loaded after END_DATE 05:00 vs SP_APPEND_DAY''s log (new rows + versions), days through '
+               || DATEADD(day, -1, :app_end)
+        FROM x LEFT JOIN lg ON lg.t = x.t;
     END IF;
 
     rs := (SELECT * FROM TMP_CHECKS ORDER BY CHECK_ID, TABLE_NAME);

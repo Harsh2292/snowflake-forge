@@ -30,6 +30,18 @@ Replay order for a new account: after `sql/05_app_access/`, run `sql/06_ops/01` 
   - no network policy (Community Cloud has no fixed egress IPs): accepted risk, mitigated by key-pair-only + driver-only
 - Optional later: agent versioning (pin the public app to a committed version), native agent evaluations.
 
+## Speed review (1 Oct, the user's levers)
+
+Where the agent's time goes (traces, 23 questions, avg 13.2 s): writing the answer 5.1 s · SQL
+step 3.9 s · follow-up suggestions 3.7 s · planning 2.0 s · Analyst context 0.1 s.
+
+| Lever | Decision |
+|---|---|
+| 1 more verified queries · 2 a faster model (Haiku) | **Not done** (the user) |
+| 3 drop the agent's follow-up suggestions | **Not done**: no documented switch found, and the user allowed it only with no quality risk |
+| 4 a bigger warehouse | **Tested, rejected.** The app's 63 metric queries, result cache off: XS 0.07 s avg execution (4.3 s for all), SMALL 0.07 s (4.3 s). The data is too small to benefit, and the agent's "SQL step" time is agent overhead, not warehouse time. FORGE_WH is back on XSMALL |
+| 5 stream the answer | **CR-008 accepted** (contract v1.7, §5.3b). Claude Code builds it; CoCo checks it live |
+
 ## Findings to remember
 
 - Each agent call made by the service user first fails a probe of `"USER$".PUBLIC."DEFAULT$"` (the

@@ -162,10 +162,14 @@ repo script, so the cutover is a replay. The code is account-agnostic (only docs
 
 ## Current State
 
-**Updated 2026-09-30 late evening.** 16 of 21 CoCo cards are done (B09a and **B08m** today):
-**the whole build now runs in the event account `QURFOQP-XU04029`** (`runs/B08m_run.md`). Next:
-B15a (key + public link), B12a part 2 (C17 + the nightly task), B14, B15. Always start from
-`.agents/NEXT.md` → "CoCo → NEXT SESSION STARTS HERE".
+**Updated 2026-10-01 evening.** 20 of 21 CoCo cards are done (B13, the scale proof, is optional
+and not run). **The public link <https://supply-chain-forge.streamlit.app/> is live on the event
+account `QURFOQP-XU04029`.** Left:
+- the 2 Oct check of the first nightly run
+- a live check of CR-008 streaming once Claude Code ships it
+- whatever Claude Code puts in the handoff lock
+
+Always start from `.agents/NEXT.md` → "CoCo → NEXT SESSION STARTS HERE".
 
 ## Critical Gotchas
 
@@ -182,7 +186,17 @@ B15a (key + public link), B12a part 2 (C17 + the nightly task), B14, B15. Always
   `SP_DATA_HEALTH` for C16 silently removed the public app's USAGE on it in the old account).
   After re-creating ANY object the app uses (the semantic view keeps grants via `COPY GRANTS`;
   procedures and the agent don't), **re-run `sql/05_app_access/01_app_service_user.sql`**. It's
-  idempotent and doesn't touch `FORGE_APP_SVC`'s key.
+  idempotent and doesn't touch `FORGE_APP_SVC`'s key. Governed views: `V_SOURCING` now has
+  `COPY GRANTS`; the others don't, so prefer `ALTER VIEW … MODIFY COLUMN … SET MASKING POLICY`
+  over re-creating a view.
+- **Sizing (B13, 1 Oct):** measure one chunk on XS before going bigger. If a statement is as
+  slow on LARGE as on SMALL, look at `GET_QUERY_OPERATOR_STATS` (B13 found a cartesian join).
+  Resizing during a running `CALL` didn't lower the billing rate. New warehouses here default to
+  Gen 2 + query acceleration: for a temporary warehouse set `GENERATION = '1'` and
+  `ENABLE_QUERY_ACCELERATION = FALSE`, under its own resource monitor. `python_repl` calls stop
+  after ~5 min while the query keeps running: poll `QUERY_HISTORY` / `GEN_LOG`.
+- **A clone carries the DMF associations.** Unset `DATA_METRIC_SCHEDULE` on its 21 objects
+  first, or 77 DMFs run serverless over the clone's data.
 - **Agent tools run as the CALLING role** (observed at B10), not the user's default role.
 - **Semantic view clause order is enforced**: `TABLES` → `RELATIONSHIPS` → `FACTS` →
   `DIMENSIONS` → `METRICS`. Build incrementally (2 tables first), never all 9 blind.

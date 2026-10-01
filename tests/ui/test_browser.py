@@ -152,14 +152,64 @@ def test_ask_instant_answer_and_a_two_part_question(app):
     box.fill(question)
     box.press("Enter")
     frames = app.page.frame_locator('iframe[data-testid="stIFrame"]')
-    expect(frames.nth(2).locator("[data-part]")).to_have_text("What are days of inventory by plant?", timeout=15_000)
-    expect(frames.nth(1).get_by_text(question)).to_be_visible()
-    expect(frames.nth(1).locator("[data-part]")).to_have_text("What is our fill rate?")
-    expect(frames.nth(2).get_by_text(question)).to_have_count(0)  # the question shows once
-    for i in range(3):
-        cut_off = frames.nth(i).locator("body").evaluate("b => b.scrollHeight - window.innerHeight")
-        assert cut_off <= 0, f"answer card {i + 1}: {cut_off}px cut off at the bottom"
+    # the first answer folds into a row; the two parts show, under the one question
+    expect(app.page.locator(".st-key-hist_0 button")).to_contain_text(config.CANONICAL_QUESTIONS[1], timeout=15_000)
+    expect(frames.nth(1).locator("[data-part]")).to_have_text("What are days of inventory by plant?")
+    expect(frames.nth(0).get_by_text(question)).to_be_visible()
+    expect(frames.nth(0).locator("[data-part]")).to_have_text("What is our fill rate?")
+    expect(frames.nth(1).get_by_text(question)).to_have_count(0)  # the question shows once
+    _cards_not_cut_off(app)
     app.screenshot(f"{app.theme}-ask-instant-two-part")
+    app.assert_no_errors()
+
+
+SURFACE = {"light": "rgb(255, 255, 255)", "dark": "rgb(27, 35, 48)"}  # theme tokens
+INK = {"light": "rgb(22, 35, 59)", "dark": "rgb(234, 240, 248)"}
+
+
+def _cards_not_cut_off(app):
+    frames = app.page.frame_locator('iframe[data-testid="stIFrame"]')
+    for i in range(app.page.locator('iframe[data-testid="stIFrame"]').count()):
+        cut_off = frames.nth(i).locator("body").evaluate("b => b.scrollHeight - window.innerHeight")
+        assert cut_off <= 0, f"answer card {i + 1}: {cut_off}px cut off (it would scroll)"
+
+
+def test_ask_folds_earlier_answers_into_rows(app):
+    """1 Oct (the user): asking again folds the previous answer into a row; a click on the row
+    opens it under the row, a second click closes it. The newest answer stays open."""
+    app.go("ask")
+    app.page.locator(".st-key-qcard_0 button").click()   # overall OTD: a one-line card
+    cards = app.page.locator('iframe[data-testid="stIFrame"]')
+    expect(cards).to_have_count(1, timeout=15_000)
+    box = app.page.locator('[data-testid="stChatInputTextArea"]')
+    box.fill("What is fill rate by product category?")
+    box.press("Enter")
+    row = app.page.locator(".st-key-hist_0 button")
+    expect(row).to_be_visible(timeout=15_000)
+    expect(row).to_contain_text(config.CANONICAL_QUESTIONS[0])
+    expect(cards).to_have_count(1)                     # the earlier answer is folded
+    expect(app.view.locator("[data-route]")).to_contain_text("Fill rate by product category")
+    after = row.evaluate("b => getComputedStyle(b, '::after').content")
+    assert "Instant" in after and " s" in after, after
+    row.click()                                         # open it under its row
+    expect(cards).to_have_count(2)
+    expect(app.view.get_by_text(config.CANONICAL_QUESTIONS[0])).to_have_count(0)  # the row is its title
+    _cards_not_cut_off(app)
+    app.screenshot(f"{app.theme}-ask-history-open")
+    row.click()                                         # and close it again
+    expect(cards).to_have_count(1)
+    app.screenshot(f"{app.theme}-ask-history")
+    app.assert_no_errors()
+
+
+def test_ask_input_is_readable_in_both_themes(app):
+    """1 Oct (the user): in dark mode the input box stayed white with light text."""
+    app.go("ask")
+    box = app.page.locator('[data-testid="stChatInputTextArea"]')
+    box.fill("Which carrier has the highest average landed cost?")
+    expect(app.page.locator('[data-testid="stChatInput"]')).to_have_css("background-color", SURFACE[app.theme])
+    expect(box).to_have_css("color", INK[app.theme])
+    expect(box).to_have_css("background-color", "rgba(0, 0, 0, 0)")
     app.assert_no_errors()
 
 

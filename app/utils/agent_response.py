@@ -86,6 +86,7 @@ def parse_agent_response(resp) -> dict:
         if block.strip().upper().startswith(("SELECT", "WITH")):
             _add_sql(sqls, block.strip())
     sql = sqls[0] if sqls else None
+    warnings = list(resp.get("warnings") or []) + [{"message": m} for m in pairing_warnings(sqls)]
     return {
         "answer": clean_answer(raw_text),
         "sql": sql,
@@ -98,10 +99,35 @@ def parse_agent_response(resp) -> dict:
         "table_titles": [t[2] for t in tables.values()],
         "suggestions": list(dict.fromkeys(suggestions)),
         "data_health": data_health,
-        "warnings": resp.get("warnings") or [],
+        "warnings": warnings,
         "status": resp.get("status", "completed"),
         "raw": resp,
     }
+
+
+_SV_PAIRS = re.compile(r"DIMENSIONS\s+(.+?)\s+METRICS\s+(.+?)(?=\s+WHERE\b|\s+FACTS\b|\)|$)", re.I | re.S)
+
+
+def pairing_warnings(sqls) -> list[str]:
+    """A visible warning when an agent query pairs a metric with a dimension contract §4
+    doesn't allow (review #2, 1 Oct). Snowflake itself accepts these pairings (art 06), but
+    they count rows more than once, so only the agent's instructions keep them out. This
+    flags it deterministically in the app for SEMANTIC_VIEW queries; SQL that Analyst writes
+    against the views directly isn't parsed."""
+    by_id = {m["id"].lower(): key for key, m in config.METRICS.items()}
+    known = {d for dims in config.DIMENSIONS.values() for d in dims}
+    found = []
+    for sql in sqls or []:
+        for dims, metrics in _SV_PAIRS.findall(sql or ""):
+            for metric in (m.strip().lower() for m in metrics.split(",")):
+                key = by_id.get(metric)
+                for dim in (d.strip().lower() for d in dims.split(",")):
+                    if key and dim in known and dim not in config.VALID_PAIRINGS[key]:
+                        found.append(f"This answer breaks {config.METRICS[key]['label'].lower()} down by "
+                                     f"{dim.split('.')[-1].replace('_', ' ')}, a pairing the governed model doesn't "
+                                     "support (contract §4): the same rows can be counted more than once. "
+                                     "Treat these numbers with caution.")
+    return list(dict.fromkeys(found))
 
 
 def clean_answer(text: str) -> str:

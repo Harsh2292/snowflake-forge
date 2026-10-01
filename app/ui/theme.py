@@ -105,15 +105,65 @@ hr {{ border-color: {t['line']}; }}
 .stApp [class*="st-key-qcard_"] button > div {{ justify-content: flex-start; width: 100%; }}
 .stApp [class*="st-key-qcard_"] button p {{ text-align: left; }}
 
+/* Ask: the asked question and the "thinking" card while it's answered (matches answer.html) */
+.sf-q {{ display: flex; justify-content: flex-end; margin: 4px 16px 12px; }}
+.sf-q span {{ background: {t['sel']}; color: {t['ink']}; padding: 12px 18px; border-radius: 18px 18px 4px 18px;
+  font-size: 16px; max-width: 80%; white-space: pre-wrap; }}
+.sf-thinking {{ display: flex; gap: 14px; align-items: flex-start; margin: 0 16px 12px; padding: 20px 24px;
+  background: {t['surface']}; border-radius: 20px; box-shadow: {t['shadow']}; }}
+.sf-thinking .av {{ flex: none; width: 36px; height: 36px; border-radius: 50%; background: {t['sel']}; color: {t['blue']};
+  display: grid; place-items: center; font-size: 13px; font-weight: 700; }}
+.sf-thinking .ttl {{ font-size: 16px; font-weight: 600; color: {t['ink']}; display: flex; align-items: center; }}
+.sf-thinking .sub {{ font-size: 14px; color: {t['muted']}; margin-top: 4px; line-height: 1.5; }}
+.sf-think-body {{ flex: 1; min-width: 0; }}
+.stApp .st-key-ask_stop button {{ border-radius: 999px; min-height: 36px; padding: 4px 16px; font-size: 14px;
+  background: {t['surface']}; color: {t['ink2']}; border: 1px solid {t['line']}; }}
+.stApp .st-key-ask_stop button:hover {{ border-color: {t['critical']}; color: {t['critical']}; }}
+.sf-stream {{ margin-top: 8px; color: {t['ink']}; font-size: 17px; line-height: 1.6; }}
+.sf-stream p {{ margin: 0 0 10px; }}
+.sf-dots {{ display: inline-flex; gap: 4px; margin-left: 8px; }}
+.sf-dots i {{ width: 6px; height: 6px; border-radius: 50%; background: {t['blue']}; animation: sfdot 1.2s infinite ease-in-out; }}
+.sf-dots i:nth-child(2) {{ animation-delay: .15s; }}
+.sf-dots i:nth-child(3) {{ animation-delay: .3s; }}
+@keyframes sfdot {{ 0%, 80%, 100% {{ opacity: .25; transform: translateY(0); }} 40% {{ opacity: 1; transform: translateY(-3px); }} }}
+@media (prefers-reduced-motion: reduce) {{ .sf-dots i {{ animation: none; opacity: .7; }} }}
+
+/* Ask: earlier questions, folded into rows (the newest answer stays open below them) */
+.sf-hist-title {{ font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: {t['muted']}; margin: 2px 0 2px 4px; }}
+.sf-hist-gap {{ height: 6px; }}
+.stApp [class*="st-key-hist_"] button {{ min-height: 52px; justify-content: space-between; text-align: left;
+  padding: 12px 20px; border-radius: 16px; border: 1px solid {t['line']}; background: {t['surface']};
+  color: {t['ink']}; font-size: 15px; font-weight: 500; box-shadow: none;
+  transition: border-color .15s ease, background .15s ease; }}
+.stApp [class*="st-key-hist_"] button:hover {{ border-color: {t['blue']}; background: {t['sel']}; color: {t['ink']}; }}
+.stApp [class*="st-key-hist_"] button > div {{ justify-content: flex-start; flex: 1; min-width: 0; }}
+.stApp [class*="st-key-hist_"] button p {{ text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.stApp [class*="st-key-hist_"] button::after {{ flex: none; margin-left: 20px; font-size: 13px; font-weight: 500;
+  color: {t['muted']}; white-space: pre; }}
+
 /* Widgets that Streamlit themes itself */
 .stApp [data-testid="stExpander"] details {{ background: {t['surface']}; border: 1px solid {t['line']}; border-radius: 16px; }}
 .stApp [data-testid="stExpander"] summary {{ color: {t['ink']}; }}
 .stApp [data-testid="stChatMessage"] {{ background: {t['surface']}; border-radius: 18px; padding: 16px 18px; box-shadow: {t['shadow']}; }}
-.stApp [data-testid="stChatInput"] {{ background: {t['surface']}; border: 1px solid {t['line']}; border-radius: 22px;
-  box-shadow: {t['shadow']}; padding: 6px 8px 6px 14px; max-width: 1080px; margin: 0 auto; }}
-.stApp [data-testid="stChatInput"]:focus-within {{ border-color: {t['blue']}; }}
-.stApp [data-testid="stChatInput"] textarea {{ color: {t['ink']}; font-size: 16px; }}
-.stApp [data-testid="stChatInputSubmitButton"] {{ background: {t['blue']}; color: {t['onblue']}; border-radius: 14px; }}
+/* Ask input: one rounded bar in the page's own colours (Streamlit paints the inner text area
+   white, which hid the light text in dark mode, 1 Oct). Every inner layer is see-through. */
+.stApp [data-testid="stChatInput"] {{ background: {t['surface']}; border: 1px solid {t['line']}; border-radius: 999px;
+  box-shadow: {t['shadow']}; padding: 6px 6px 6px 22px; max-width: 1080px; margin: 0 auto;
+  transition: border-color .15s ease, box-shadow .15s ease; }}
+.stApp [data-testid="stChatInput"]:focus-within {{ border-color: {t['blue']};
+  box-shadow: 0 0 0 4px {t['sel']}, {t['shadow']}; }}
+.stApp [data-testid="stChatInput"] > div, .stApp [data-testid="stChatInput"] [data-baseweb="textarea"],
+.stApp [data-testid="stChatInput"] [data-baseweb="base-input"] {{ background: transparent !important;
+  border: none !important; box-shadow: none !important; }}
+.stApp [data-testid="stChatInput"] textarea {{ background: transparent !important; color: {t['ink']} !important;
+  -webkit-text-fill-color: {t['ink']}; caret-color: {t['blue']}; font-size: 16px; line-height: 1.5; }}
+.stApp [data-testid="stChatInput"] textarea::placeholder {{ color: {t['muted']} !important;
+  -webkit-text-fill-color: {t['muted']}; opacity: 1; }}
+.stApp [data-testid="stChatInput"] [data-testid="InputInstructions"] {{ color: {t['muted']}; }}
+.stApp [data-testid="stChatInputSubmitButton"] {{ background: {t['blue']}; color: {t['onblue']}; border-radius: 999px;
+  min-width: 40px; min-height: 40px; }}
+.stApp [data-testid="stChatInputSubmitButton"]:disabled {{ background: {t['raised']}; color: {t['muted']}; }}
 .stApp [data-testid="stBottom"] > div, .stApp [data-testid="stBottomBlockContainer"] {{ background: {t['page']}; }}
 .stApp [data-testid="stBaseButton-pills"] {{ background: {t['surface']}; color: {t['ink']}; border: 1px solid {t['line']}; border-radius: 999px; min-height: 36px; font-weight: 500; }}
 .stApp [data-testid="stBaseButton-pillsActive"] {{ background: {t['blue']}; color: {t['onblue']}; border-radius: 999px; min-height: 36px; }}

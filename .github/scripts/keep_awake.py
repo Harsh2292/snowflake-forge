@@ -2,8 +2,8 @@
 
 Opens the public URL in headless Chromium, wakes the app if it's asleep, then clicks
 through every screen, so each screen's queries are cached for the next visitor. Exits 1 if
-the app doesn't load or any screen shows the "live connection paused" banner, so GitHub
-emails the repo owner.
+the app doesn't load, a screen never finishes running, shows a Streamlit error, or shows
+the "live connection paused" banner, so GitHub emails the repo owner.
 
     python .github/scripts/keep_awake.py https://<app>.streamlit.app
 """
@@ -31,14 +31,31 @@ def find(page, name, timeout: float):
     return None
 
 
-def settle(page, timeout: float = 120) -> None:
-    """Wait until Streamlit has finished running (its status widget is gone)."""
+def settle(page, timeout: float = 120) -> bool:
+    """Wait until Streamlit has finished running (its status widget is gone). False if it
+    is still running after `timeout` seconds (review #19: a hang used to pass silently)."""
     page.wait_for_timeout(2000)
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not any(f.locator('[data-testid="stStatusWidget"]').count() for f in page.frames):
-            return
+            return True
         page.wait_for_timeout(1000)
+    return False
+
+
+def crashed(page) -> bool:
+    """A Streamlit exception box on the page (an uncaught error in a screen)."""
+    return any(f.locator('[data-testid="stException"]').count() for f in page.frames)
+
+
+def problem(page, settled: bool) -> str | None:
+    if not settled:
+        return "still running after 2 minutes"
+    if crashed(page):
+        return "Streamlit error"
+    if fell_back(page):
+        return "live connection paused"
+    return None
 
 
 def fell_back(page) -> bool:
@@ -57,21 +74,21 @@ def main(url: str) -> int:
         if find(page, re.compile("The problem"), 300) is None:
             print("FAIL: the app didn't load within 5 minutes")
             return 1
-        settle(page)
-        failed = ["The problem (first load)"] if fell_back(page) else []
+        first = problem(page, settle(page))
+        failed = [f"The problem (first load): {first}"] if first else []
         for label in SCREENS:
             button = find(page, re.compile(re.escape(label)), 60)
             if button is None:
                 print(f"FAIL: no '{label}' button")
                 return 1
             button.click()
-            settle(page)
-            if fell_back(page):
-                failed.append(label)
-            print(f"  {label}: {'FALLBACK' if label in failed else 'ok'}")
+            issue = problem(page, settle(page))
+            if issue:
+                failed.append(f"{label}: {issue}")
+            print(f"  {label}: {issue or 'ok'}")
         browser.close()
     if failed:
-        print(f"FAIL: live connection paused on {', '.join(failed)}")
+        print(f"FAIL: {'; '.join(failed)}")
         return 1
     print("OK: awake, every screen live, caches warm")
     return 0

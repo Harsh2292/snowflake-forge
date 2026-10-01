@@ -58,8 +58,8 @@ so art 02–06 were captured on the v1 data and are re-captured on the new data.
 | `08_agent_answers.md` | **B10** ✅ 30 Sep | The whole evaluation set (30 questions, 27 passed): answers, generated SQL, pass/fail, latency | **C6c** |
 | `09_consistency_proof.json` | **B09** (old B11 merged in) | 4 metrics × 3 personas, real values, to 6 decimal places | **C6c** |
 | `10_dmf_results.json` | **B12** ✅ 30 Sep | `DATA_QUALITY_MONITORING_RESULTS` snapshot (latest per association, 77), plus `SP_DATA_HEALTH('ALL')` per role and the shipments entity | Tab 5 |
-| `11_contract_audit.md` | **B14** | Line-by-line conformance result against `docs/CONTRACT.md`, plus the security review | all |
-| `12_scale_report.md` | **B13** | The scale proof on a clone: timings, partition pruning, credits, and proof the definitions and SQL shape didn't change | C05, README |
+| `11_contract_audit.md` | **B14** ✅ 1 Oct | The live contract audit (148/148 as admin and as the public app user) plus the security review (identity, masking, AI safety, abuse/cost, observability, findings F1–F9; F8/F9 fixed late 1 Oct) | all |
+| `12_scale_report.md` | **B13** ⏹ not written (stopped by the user 1 Oct; `runs/B13_partial_run.md`) | The scale proof on a clone: timings, partition pruning, credits, and proof the definitions and SQL shape didn't change | C05, README |
 
 ### Run reports: `runs/`
 

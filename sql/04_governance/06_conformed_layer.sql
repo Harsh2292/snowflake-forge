@@ -25,7 +25,8 @@
 -- ever non-zero), MISSING_PROMISED_DATE (E01), ORDER_CANCELLED_AFTER_SHIPPING
 -- (E02), OVERSHIP_CAPPED (E04), NEG_ON_HAND_ZEROED (E05), ZERO_USAGE (E06),
 -- DUTY_DEFAULTED (E07a), HANDLING_DEFAULTED (E07b), COST_UNKNOWN (E07c),
--- COST_OUTLIER (E08), PRIMARY_DEMOTED (E11).
+-- COST_OUTLIER (E08), PRIMARY_SUPERSEDED (E11), FX_MISSING (no USD rate for
+-- the currency on the business date; the USD amount is NULL).
 -- ============================================================
 
 USE ROLE ACCOUNTADMIN;
@@ -101,6 +102,7 @@ WITH t AS (
     SELECT UPPER(TRIM(FCURR)) AS currency, GDATU AS rate_date, UKURS
     FROM SUPPLY_CHAIN_FORGE.ERP_SOURCE.TCURR
     WHERE UPPER(TRIM(KURST)) = 'M' AND UPPER(TRIM(TCURR)) = 'USD'
+      AND UPPER(TRIM(FCURR)) <> 'USD'   -- USD comes only from the UNION ALL row below
     QUALIFY ROW_NUMBER() OVER (PARTITION BY UPPER(TRIM(FCURR)), GDATU ORDER BY LOAD_TS DESC) = 1),
 c AS (SELECT DISTINCT currency FROM t),
 g AS (
@@ -233,11 +235,16 @@ WHERE NOT (UPPER(TRIM(k.KUNNR)) LIKE 'TEST%'
 
 -- ── 5. SOURCING: validity kept, E11 overlapping primaries resolved ──────────
 -- Test vendors and test parts drop via the inner joins BEFORE the E11 window,
--- so a test row can never demote a real primary. Contract price to USD at
--- VDATU (§4 M05). GOVERNED.V_SOURCING shows only rows valid today.
+-- so a test row can never supersede a real primary. E11: is_primary stays the
+-- source flag, and a primary that a later-starting primary overlaps is flagged
+-- PRIMARY_SUPERSEDED. Which primary wins depends on the date, so the rule
+-- ("the latest VDATU wins, the other is secondary") is applied by
+-- GOVERNED.V_SOURCING on the rows valid today: right for a replacement that
+-- starts in the future, a nested one, or one that has already ended.
+-- Contract price to USD at VDATU (§4 M05).
 CREATE OR REPLACE DYNAMIC TABLE SUPPLY_CHAIN_FORGE.CONFORMED.SOURCING
     TARGET_LAG = '1 day' WAREHOUSE = FORGE_WH REFRESH_MODE = INCREMENTAL
-    COMMENT = 'Clean supplier-to-part source list with validity (from SRM_SOURCE.SOURCING): USD, one primary per part per date'
+    COMMENT = 'Clean supplier-to-part source list with validity (from SRM_SOURCE.SOURCING): USD, overlapping primaries flagged (E11, resolved per date in GOVERNED.V_SOURCING)'
 AS
 WITH s AS (
     SELECT SOURCE_ID, LIFNR, MATNR, IS_PRIMARY, CONTRACT_PRICE, WAERS, VDATU, BDATU, LOAD_TS
@@ -245,23 +252,28 @@ WITH s AS (
     QUALIFY ROW_NUMBER() OVER (PARTITION BY UPPER(TRIM(SOURCE_ID)) ORDER BY LOAD_TS DESC, SOURCE_ID) = 1),
 j AS (
     SELECT s.SOURCE_ID, s.LIFNR, s.MATNR, s.IS_PRIMARY, s.WAERS, s.VDATU, s.BDATU, s.LOAD_TS,
-           sup.supplier_id, p.part_id, s.CONTRACT_PRICE * fx.usd_rate AS price_usd
+           sup.supplier_id, p.part_id, s.CONTRACT_PRICE * fx.usd_rate AS price_usd,
+           fx.usd_rate
     FROM s
     JOIN SUPPLY_CHAIN_FORGE.CONFORMED.SUPPLIER sup ON sup.supplier_id = UPPER(TRIM(s.LIFNR))
     JOIN SUPPLY_CHAIN_FORGE.CONFORMED.PART p       ON p.part_id = UPPER(TRIM(s.MATNR))
     LEFT JOIN SUPPLY_CHAIN_FORGE.CONFORMED.FX_RATE fx
            ON fx.currency = UPPER(TRIM(s.WAERS)) AND fx.rate_date = s.VDATU),
-w AS (
+w0 AS (
     SELECT j.*,
-           j.IS_PRIMARY AND LEAD(j.VDATU) OVER (PARTITION BY j.part_id, j.IS_PRIMARY ORDER BY j.VDATU, j.SOURCE_ID) IS NOT NULL
-                        AND (j.BDATU IS NULL
-                             OR j.BDATU >= LEAD(j.VDATU) OVER (PARTITION BY j.part_id, j.IS_PRIMARY ORDER BY j.VDATU, j.SOURCE_ID))
-               AS demoted
-    FROM j)
+           IFF(j.IS_PRIMARY,
+               LEAD(j.VDATU) OVER (PARTITION BY j.part_id, j.IS_PRIMARY ORDER BY j.VDATU, j.SOURCE_ID),
+               NULL) AS next_primary_from
+    FROM j),
+w AS (
+    SELECT w0.*,
+           next_primary_from IS NOT NULL
+               AND (BDATU IS NULL OR BDATU >= next_primary_from) AS superseded
+    FROM w0)
 SELECT UPPER(TRIM(w.SOURCE_ID))::VARCHAR(20)                 AS source_id,
        w.supplier_id                                         AS supplier_id,
        w.part_id                                             AS part_id,
-       (w.IS_PRIMARY AND NOT COALESCE(w.demoted, FALSE))     AS is_primary,
+       w.IS_PRIMARY                                          AS is_primary,
        ROUND(w.price_usd, 2)::NUMBER(12,2)                   AS contract_price,
        UPPER(TRIM(w.WAERS))::VARCHAR(3)                      AS source_currency,
        w.VDATU                                               AS valid_from,
@@ -269,7 +281,8 @@ SELECT UPPER(TRIM(w.SOURCE_ID))::VARCHAR(20)                 AS source_id,
        ARRAY_COMPACT(ARRAY_CONSTRUCT(
            IFF(w.SOURCE_ID <> UPPER(TRIM(w.SOURCE_ID)) OR w.LIFNR <> w.supplier_id OR w.MATNR <> w.part_id,
                'ID_NORMALIZED', NULL),
-           IFF(COALESCE(w.demoted, FALSE), 'PRIMARY_DEMOTED', NULL))) AS dq_flags,
+           IFF(w.superseded, 'PRIMARY_SUPERSEDED', NULL),
+           IFF(w.usd_rate IS NULL, 'FX_MISSING', NULL)))     AS dq_flags,
        w.LOAD_TS                                             AS load_ts
 FROM w;
 
@@ -361,7 +374,8 @@ SELECT UPPER(TRIM(l.LINE_ID))::VARCHAR(20)                   AS line_id,
        ARRAY_COMPACT(ARRAY_CONSTRUCT(
            IFF(l.LINE_ID <> UPPER(TRIM(l.LINE_ID)) OR l.VBELN <> o.order_id
                OR l.MATNR <> p.part_id OR l.WERKS <> pl.plant_id, 'ID_NORMALIZED', NULL),
-           IFF(l.QTY_SHIPPED > l.KWMENG, 'OVERSHIP_CAPPED', NULL))) AS dq_flags,
+           IFF(l.QTY_SHIPPED > l.KWMENG, 'OVERSHIP_CAPPED', NULL),
+           IFF(fx.usd_rate IS NULL, 'FX_MISSING', NULL)))     AS dq_flags,
        l.LOAD_TS                                             AS load_ts
 FROM l
 JOIN SUPPLY_CHAIN_FORGE.CONFORMED.SALES_ORDER o ON o.order_id = UPPER(TRIM(l.VBELN))
@@ -394,7 +408,8 @@ u AS (
            cr.CANONICAL AS carrier_c, ss.CANONICAL AS status_c,
            s.FREIGHT_AMT * fx.usd_rate  AS f_usd,
            s.DUTY_AMT * fx.usd_rate     AS d_usd,
-           s.HANDLING_AMT * fx.usd_rate AS h_usd
+           s.HANDLING_AMT * fx.usd_rate AS h_usd,
+           fx.usd_rate
     FROM s
     JOIN SUPPLY_CHAIN_FORGE.CONFORMED.SALES_ORDER o ON o.order_id = UPPER(TRIM(s.VBELN))
     JOIN SUPPLY_CHAIN_FORGE.CONFORMED.PLANT pl      ON pl.plant_id = UPPER(TRIM(s.WERKS))
@@ -431,7 +446,8 @@ SELECT UPPER(TRIM(k.TKNUM))::VARCHAR(12)                     AS shipment_id,
            IFF(k.DUTY_AMT IS NULL AND NOT (k.cost_unknown OR k.cost_outlier), 'DUTY_DEFAULTED', NULL),
            IFF(k.HANDLING_AMT IS NULL AND NOT (k.cost_unknown OR k.cost_outlier), 'HANDLING_DEFAULTED', NULL),
            IFF(k.cost_unknown, 'COST_UNKNOWN', NULL),
-           IFF(k.cost_outlier, 'COST_OUTLIER', NULL)))       AS dq_flags,
+           IFF(k.cost_outlier, 'COST_OUTLIER', NULL),
+           IFF(k.usd_rate IS NULL, 'FX_MISSING', NULL)))     AS dq_flags,
        k.LOAD_TS                                             AS load_ts
 FROM k;
 

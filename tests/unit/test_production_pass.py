@@ -112,6 +112,42 @@ def test_answer_chart_keeps_a_null_value_as_missing():
     assert [r["value"] for r in data["chart"]["rows"]] == [0.92, None]
 
 
+def _answer(tables, **extra):
+    return payloads.answer("q", {"answer": "a", "sql": "s", "metric_used": [], "tables": tables,
+                                 "row_counts": [len(t) for t in tables], "verified_query_used": None,
+                                 "warnings": [], "raw": {}, "source": "live", **extra})
+
+
+def test_a_combined_answer_charts_every_table_that_can_be_charted():
+    """1 Oct: the agent put the one-row shipment count first, so the tier breakdown after it
+    got no chart. Every table with two or more rows gets its own chart now."""
+    count = [{"SHIPMENT_COUNT": 95513}]
+    tiers = [{"SUPPLIER_TIER": "1", "AVG_LEAD_TIME_DAYS": 11.2}, {"SUPPLIER_TIER": "2", "AVG_LEAD_TIME_DAYS": 22.8},
+             {"SUPPLIER_TIER": "3", "AVG_LEAD_TIME_DAYS": 30.0}]
+    data = _answer([count, tiers])
+    assert len(data["charts"]) == 1 and data["chart"] is data["charts"][0]
+    chart = data["chart"]
+    assert chart["kind"] == "bars" and chart["format"] == "number" and chart["axis"] == "Supplier tier"
+    assert [r["label"] for r in chart["rows"]] == ["1", "2", "3"]  # the agent's order is kept
+
+
+def test_periods_are_columns_and_metric_columns_keep_their_format():
+    quarters = [{"ORDER_YEAR_QUARTER": q, "ON_TIME_DELIVERY_RATE": v} for q, v in
+                [("2025-Q4", 0.87), ("2026-Q1", 0.88), ("2026-Q2", 0.86)]]
+    regions = [{"PLANT_REGION": r, "FILL_RATE": v} for r, v in [("AMER", 0.92), ("APAC", 0.93)]]
+    data = _answer([quarters, regions])
+    assert [c["kind"] for c in data["charts"]] == ["columns", "bars"]
+    assert [c["format"] for c in data["charts"]] == ["percent", "percent"]
+
+
+def test_an_instant_breakdown_is_drawn_highest_first_unless_ranked():
+    regions = [{"PLANT_REGION": r, "FILL_RATE": v} for r, v in [("AMER", 0.92), ("APAC", 0.93), ("EMEA", 0.91)]]
+    plain = _answer([regions], route="instant")
+    assert [r["label"] for r in plain["chart"]["rows"]] == ["APAC", "AMER", "EMEA"]
+    ranked = _answer([list(reversed(regions))], route="instant", raw={"ranked": "asc"})
+    assert [r["label"] for r in ranked["chart"]["rows"]] == ["EMEA", "APAC", "AMER"]
+
+
 # ── As-of date and time window (contract §3a) ────────────────────────────────
 
 def test_every_screen_states_the_window_and_the_as_of_date():
@@ -161,3 +197,65 @@ def test_health_shows_one_row_per_kind_of_check_and_fits_its_view():
     scored = results[results["STATUS"] != "INFO"]
     assert (data["passing"], data["scored"]) == (int((scored["STATUS"] == "PASS").sum()), len(scored))
     assert payloads.health_height(data) > payloads.health_height({**data, "checks": data["checks"][:3]})
+
+
+# ── External review fixes (1 Oct) ─────────────────────────────────────────────
+
+def test_explore_quarters_carry_their_year():
+    """Review #8: a rolling 12-month window spans two years; Q1-Q4 alone would merge them."""
+    data = payloads.explore("mock")
+    for key, items in data["breakdowns"].items():
+        quarter = next(i for i in items if i["id"] == "quarter")
+        if quarter["allowed"]:
+            assert quarter["rows"] and all(re.fullmatch(r"\d{4}-Q[1-4]", r["name"]) for r in quarter["rows"]), key
+
+
+def test_the_otd_formula_states_its_denominator():
+    """Review #9: delivered shipments WITH a promised date, as the metric counts them."""
+    assert "with a promised date" in payloads.FORMULAS["on_time_delivery_rate"]
+
+
+def test_the_raw_tab_leaves_out_the_agents_thinking():
+    """Review #17: the reasoning can paraphrase the agent's instructions."""
+    raw = {"content": [{"type": "thinking", "thinking": {"text": "My instructions say: Which tool, when..."}},
+                       {"type": "text", "text": "Fill rate is 92.6%."}]}
+    data = payloads.answer("q", {"answer": "a", "sql": "", "metric_used": [], "tables": [], "row_counts": [],
+                                 "verified_query_used": None, "warnings": [], "raw": raw, "source": "live"})
+    assert "Which tool, when" not in data["raw"] and "Fill rate is 92.6%" in data["raw"]
+
+
+def test_an_agent_query_with_a_forbidden_pairing_is_flagged():
+    """Review #2: Snowflake accepts OTD by part category (art 06); the app flags it."""
+    from utils import agent_response
+    bad = ("SELECT * FROM SEMANTIC_VIEW(SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_SV DIMENSIONS parts.category "
+           "METRICS shipments.on_time_delivery_rate WHERE shipments.ship_date > DATEADD(month, -12, CURRENT_DATE()))")
+    good = forge_data.build_metric_sql("on_time_delivery_rate", "plants.plant_region")
+    (warning,) = agent_response.pairing_warnings([bad, good])
+    assert "on-time delivery down by category" in warning and "contract §4" in warning
+    assert agent_response.pairing_warnings([good]) == []
+    for q in config.CANONICAL_QUESTIONS:  # nothing the app itself runs is ever flagged
+        result = forge_data.ask_agent(q)
+        assert not any("contract §4" in w.get("message", "") for w in result["warnings"]), q
+
+
+def test_a_daily_check_that_did_not_rerun_is_called_out(monkeypatch):
+    """Review #10: shown, not hidden. A check on daily data measured 3 days before the latest
+    one gets a note; old checks on reference tables don't (they only run when data changes)."""
+    import pandas as pd
+    real = forge_data.get_quality_results()
+    latest = pd.to_datetime(real["MEASUREMENT_TIME"]).max()
+
+    def aged(table_name):
+        df = real.copy()
+        df.loc[df["TABLE_NAME"] == table_name, "MEASUREMENT_TIME"] = latest - pd.Timedelta(days=3)
+        return df
+
+    import streamlit as st
+    for table, expect_note in (("SHIPMENT", True), ("SUPPLIER", False)):
+        st.cache_data.clear()
+        monkeypatch.setattr(forge_data, "get_quality_results", lambda t=table: aged(t))
+        note = payloads.health("mock")["stale_note"]
+        assert bool(note) is expect_note, table
+        if expect_note:
+            assert "may not reflect the latest load" in note
+    st.cache_data.clear()

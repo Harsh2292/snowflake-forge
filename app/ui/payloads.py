@@ -13,7 +13,7 @@ import streamlit as st
 from utils import config, forge_data, mock_data, router
 
 FORMULAS = {
-    "on_time_delivery_rate": "Delivered on or before the promised date ÷ all delivered shipments",
+    "on_time_delivery_rate": "Delivered on or before the promised date ÷ delivered shipments with a promised date",
     "fill_rate": "Quantity shipped ÷ quantity ordered",
     "days_of_inventory": "Average stock on hand ÷ average daily usage",
     "avg_landed_cost": "Average of freight + duties + handling per shipment",
@@ -24,7 +24,9 @@ BREAKDOWNS = [
     ("region", "By region", "Region", "plants.plant_region"),
     ("plant", "By plant", "Plant", "plants.plant_name"),
     ("category", "By product category", "Product category", "parts.category"),
-    ("quarter", "By quarter", "Quarter", "orders.order_quarter"),
+    # year and quarter (2026-Q3): a rolling 12-month window spans two years, and the bare
+    # quarter (Q1-Q4) would merge them into one bar (review #8). The agent uses the same one.
+    ("quarter", "By quarter", "Quarter", "orders.order_year_quarter"),
     ("segment", "By customer segment", "Customer segment", "customers.customer_segment"),
     ("status", "By order status", "Order status", "orders.order_status"),
 ]
@@ -154,7 +156,9 @@ def _records(samples: dict) -> list[dict]:
 @st.cache_data(ttl=config.SCREEN_CACHE_SECONDS, show_spinner=False)
 def same(mode: str) -> dict:
     grid = forge_data.compare_across_personas().set_index("METRIC")
-    samples = {p: forge_data.get_masking_divergence(p) for p in config.PERSONA_ROLES}
+    personas = list(config.PERSONA_ROLES)
+    samples = dict(zip(personas, (df for df, _ in router.run_parallel(
+        [lambda p=p: forge_data.get_masking_divergence(p) for p in personas], max_workers=len(personas)))))
     personas = [{"key": p.upper(), "label": config.PERSONA_LABELS[p], "desc": config.PERSONA_DESCRIPTIONS[p],
                  "initials": INITIALS[p], "visibility": _visibility(sample)} for p, sample in samples.items()]
     grid_out = {k: {"values": {p: _num(grid.loc[k, p]) for p in ("PLANNER", "BUYER", "LOGISTICS")},
@@ -163,8 +167,17 @@ def same(mode: str) -> dict:
             "dp": config.CONSISTENCY_DP, "practice": PRACTICE_NOTE if grid.attrs.get("source") != "live" else ""}
 
 
+EXPLORE_WORKERS = 8  # Explore's ~19 breakdown queries run this many at a time (thread-safe session)
+
+
 @st.cache_data(ttl=config.SCREEN_CACHE_SECONDS, show_spinner=False)
 def explore(mode: str) -> dict:
+    # Live, the first visit after a restart ran these one by one: minutes on a cold app
+    # (1 Oct). They're independent, so they run at once; the cache keeps them for 12 h.
+    pairs = [(key, dimension) for key in config.METRICS for *_, dimension in BREAKDOWNS
+             if dimension in config.VALID_PAIRINGS[key]]
+    frames = dict(zip(pairs, (df for df, _ in router.run_parallel(
+        [lambda k=k, d=d: forge_data.get_metric(k, d) for k, d in pairs], max_workers=EXPLORE_WORKERS))))
     breakdowns = {}
     for key in config.METRICS:
         items = []
@@ -172,7 +185,7 @@ def explore(mode: str) -> dict:
             allowed = dimension in config.VALID_PAIRINGS[key]
             rows = []
             if allowed:
-                df = forge_data.get_metric(key, dimension)
+                df = frames[(key, dimension)]
                 rows = [{"name": str(n), "value": _num(v)} for n, v in zip(df[config.column_name(dimension)], df[_metric_col(key)])]
                 if bid not in IN_NATURAL_ORDER:
                     rows = _by_value(rows)
@@ -211,6 +224,10 @@ def _age(seconds: float) -> str:
 # Row counts and data age are per table, and the freshness table below the checks shows
 # them; one row each here would repeat it for every table (C6b: 77 live DMF results).
 IN_FRESHNESS_TABLE = {"ROW_COUNT", "FRESHNESS"}
+# Tables the nightly feed changes (raw and cleaned); reference tables rarely change, so their
+# checks rightly stay old (DMFs run on change).
+DAILY_TABLES = {"VBAK", "VBAP", "VTTK", "MARD", "TCURR", "SALES_ORDER", "ORDER_LINE", "SHIPMENT", "INVENTORY", "FX_RATE"}
+STALE_CHECK_HOURS = 48
 TABLES_NAMED = 3  # a check row names this many tables, then "+N more"
 _STATUS_ORDER = {"FAIL": 0, "PASS": 1, "INFO": 2}
 
@@ -248,9 +265,16 @@ def health(mode: str) -> dict:
     # the cleaned data first (failures first), then the raw data; stable within each
     checks.sort(key=lambda c: (bool(c["note"]), _STATUS_ORDER[c["status"]]))
     scored = df[df["STATUS"] != "INFO"]  # counted per table: every DMF association is one check
-    checked = pd.to_datetime(df["MEASUREMENT_TIME"]).max()
+    measured = pd.to_datetime(df["MEASUREMENT_TIME"])
+    checked = measured.max()
+    # Review #10: a check on a daily table measured well before the latest one hasn't run since
+    # the data changed, so its "passing" may describe an older load. Said, not hidden.
+    daily = df["TABLE_NAME"].astype(str).str.upper().isin(DAILY_TABLES)
+    stale = int((daily & (measured < checked - pd.Timedelta(hours=STALE_CHECK_HOURS))).sum())
+    stale_note = (f"{stale} check{'s' if stale != 1 else ''} on daily data last ran more than "
+                  f"{STALE_CHECK_HOURS} hours before the latest one, so may not reflect the latest load.") if stale else ""
     return {"checks": checks, "passing": int((scored["STATUS"] == "PASS").sum()), "scored": len(scored),
-            "checked": f"{checked:%d %b %Y, %H:%M}", **_tables_health()}
+            "checked": f"{checked:%d %b %Y, %H:%M}", "stale_note": stale_note, **_tables_health()}
 
 
 def health_height(data: dict) -> int:
@@ -279,7 +303,7 @@ def _date_label(value) -> str:
         return ""
 
 
-@st.cache_data(ttl=config.SCREEN_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=config.AS_OF_CACHE_SECONDS, show_spinner=False)
 def as_of(mode: str) -> str:
     """The as-of date shown with every metric (contract §3a): the latest business date
     loaded, from SP_DATA_HEALTH. Empty in live mode if the procedure isn't reachable, so a
@@ -291,12 +315,20 @@ def as_of(mode: str) -> str:
     return _date_label(data.get("as_of_date"))
 
 
+def data_version() -> str:
+    """The key every cached screen and answer shares: the data mode and the data's as-of
+    date (review #5). When the nightly load moves the as-of date, all of them roll over at
+    once, instead of each on its own 12-hour clock."""
+    mode = forge_data.data_mode()
+    return f"{mode}|{as_of(mode)}"
+
+
 def _chart_window(label_col: str, rows: list[dict]) -> list[dict]:
     """At most BARS_SHOWN rows. A time series keeps its most recent rows, in time order;
     anything else keeps the agent's order (it ranks and limits the rows itself)."""
     if len(rows) <= BARS_SHOWN:
         return rows
-    if any(word in label_col.upper() for word in ("DATE", "DAY", "WEEK", "MONTH", "QUARTER", "YEAR")):
+    if any(word in label_col.upper() for word in TIME_WORDS):
         return sorted(rows, key=lambda r: r["label"])[-BARS_SHOWN:]
     return rows[:BARS_SHOWN]
 
@@ -309,27 +341,66 @@ def _health_note(data) -> str:
     return f"Data health check: {str(data['status']).upper()}{as_of}"
 
 
+def _public_raw(raw):
+    """The agent response for the Raw tab, without its "thinking" blocks: the orchestrator's
+    reasoning can paraphrase its own instructions (review #17). Everything else is data the
+    masked app role may already see."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("content"), list):
+        return raw
+    return {**raw, "content": [item for item in raw["content"]
+                               if not (isinstance(item, dict) and item.get("type") == "thinking")]}
+
+
 def _elapsed(seconds) -> str:
     return "" if seconds is None else f"{seconds:.1f} s"
+
+
+TIME_WORDS = ("DATE", "DAY", "WEEK", "MONTH", "QUARTER", "YEAR")
+MAX_CHARTS = 3  # an agent answer to a combined question can carry a table per part
+
+
+def _value_format(value_col: str, keys: list, single: bool) -> str:
+    """The value column's format: the contract metric it names, else (one table) the
+    answer's metric, else a plain number (lead time, counts)."""
+    for key in config.METRICS:
+        if value_col.upper() == _metric_col(key):
+            return config.METRICS[key]["format"]
+    return config.METRICS[keys[0]]["format"] if keys and single else "number"
+
+
+def _chart(table: list, total, title, keys: list, single: bool, sort: bool):
+    """A chart from one result table (a label column, then a numeric one), or None.
+    Periods draw as columns in time order; anything else as horizontal bars, the
+    same style as Explore (1 Oct: the old columns looked dated)."""
+    if not table or len(table) < 2 or len(table[0]) < 2:
+        return None
+    label_col, value_col = list(table[0])[:2]
+    rows = [{"label": str(r[label_col]), "value": _num(r[value_col])} for r in table]
+    if all(r["value"] is None for r in rows) or any(
+            r[value_col] is not None and _num(r[value_col]) is None for r in table):
+        return None
+    is_time = any(word in label_col.upper() for word in TIME_WORDS)
+    if sort and not is_time:
+        rows = _by_value([{"name": r["label"], "value": r["value"]} for r in rows])
+        rows = [{"label": r["name"], "value": r["value"]} for r in rows]
+    return {"rows": _chart_window(label_col, rows), "total": total, "kind": "columns" if is_time else "bars",
+            "format": _value_format(value_col, keys, single), "axis": label_col.replace("_", " ").capitalize(),
+            "title": title or f"{value_col.replace('_', ' ').capitalize()} by {label_col.replace('_', ' ').lower()}"}
 
 
 def answer(question: str, result: dict, part: str = "") -> dict:
     """One Ask answer, for the answer card view. `question` is the bubble above the card
     (empty under a split question's first card); `part` is the part this card answers."""
     keys = result["metric_used"]
-    chart = None
-    table = result["tables"][0] if result["tables"] else None
-    total = (result.get("row_counts") or [len(table or [])])[0]
-    if table and len(table) >= 2 and len(table[0]) >= 2:
-        label_col, value_col = list(table[0])[:2]
-        rows = [{"label": str(r[label_col]), "value": _num(r[value_col])} for r in table]
-        if any(r["value"] is not None for r in rows) and all(
-                r[value_col] is None or _num(r[value_col]) is not None for r in table):
-            fmt = config.METRICS[keys[0]]["format"] if keys else "number"
-            title = (result.get("table_titles") or [None])[0]  # the agent's own title (art 07)
-            chart = {"rows": _chart_window(label_col, rows), "total": total, "format": fmt,
-                     "title": title or f"{label_col.replace('_', ' ').title()} by value"}
     instant = result.get("route") == "instant"
+    tables = result["tables"] or []
+    counts = result.get("row_counts") or [len(t) for t in tables]
+    titles = result.get("table_titles") or [None] * len(tables)  # the agent's own titles (art 07)
+    # an instant answer that isn't ranked is drawn highest first; the agent's order is kept
+    sort = instant and not (result.get("raw") or {}).get("ranked")
+    charts = [c for c in (_chart(t, n, title, keys, len(tables) == 1, sort)
+                          for t, n, title in zip(tables, counts, titles)) if c][:MAX_CHARTS]
+    chart = charts[0] if charts else None
     return {
         "question": question, "part": part,
         # which path answered (C14): the instant shortcut or the agent
@@ -340,11 +411,11 @@ def answer(question: str, result: dict, part: str = "") -> dict:
         "metrics": [config.METRICS[k]["label"] for k in keys],
         "definitions": [{"label": config.METRICS[k]["label"], "formula": FORMULAS[k],
                          "definition": config.METRICS[k]["definition"], "id": config.METRICS[k]["id"]} for k in keys],
-        "semantic_view": config.SEMANTIC_VIEW, "chart": chart,
+        "semantic_view": config.SEMANTIC_VIEW, "chart": chart, "charts": charts,
         # what the agent used, in words ("Verified query" has its own chip)
         "tools": [x for x in result.get("tools_used") or [] if x != "Verified query"],
         "health": _health_note(result.get("data_health")),
         "warnings": [w.get("message", "The agent reported a warning.") for w in result["warnings"]],
         "practice": result.get("source") != "live",
-        "raw": json.dumps(result["raw"], indent=2, default=str)[:20000],
+        "raw": json.dumps(_public_raw(result["raw"]), indent=2, default=str)[:20000],
     }

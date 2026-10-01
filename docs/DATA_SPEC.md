@@ -404,7 +404,7 @@ matters.
 | **E09a** | Orphan lines | VBAP · 0.2% of lines | `VBELN` of an order that doesn't exist (`ORD9…`) | dropped | no |
 | **E09b** | Orphan shipments | VTTK · 0.2% of shipments | same | dropped | no |
 | **E10** | ERP/TMS date conflict | VBAK vs VTTK · 20% of shipped orders | §3.2 (not injected) | **preserved**; `ERDAT` never reaches `CONFORMED` or `GOVERNED` | ERDAT no; TMS date yes |
-| **E11** | Two valid primaries | SOURCING · 1% of parts | a second `IS_PRIMARY = TRUE` row overlapping the valid one | the primary with the latest `VDATU` wins; the other becomes secondary | yes, as secondary |
+| **E11** | Two valid primaries | SOURCING · 1% of parts | a second `IS_PRIMARY = TRUE` row overlapping the valid one | the primary with the latest `VDATU` wins; the other becomes secondary. Resolved per date in `GOVERNED.V_SOURCING` among the rows valid that day, so a replacement that starts later, nests inside, or has ended leaves exactly one primary (`CONFORMED` keeps the source flag + `PRIMARY_SUPERSEDED`; CoCo, 2026-10-01) | yes, as secondary |
 | **E12** | Future-dated orders | VBAK · 0.02% of orders | `AUDAT = LOAD_TS::DATE + 1..400` (clock error; `LOAD_TS` unchanged), with their lines; no shipments | excluded: an order dated after it was loaded (`AUDAT > LOAD_TS::DATE`). Deterministic, so it suits an incremental dynamic table | no |
 
 `CONFORMED` rows carry a `dq_flags ARRAY` of the flag names above (empty when clean), so

@@ -162,7 +162,7 @@ class FakeRows:
     def __init__(self, rows):
         self._rows = rows
 
-    def collect(self):
+    def collect(self, statement_params=None):
         return [SimpleNamespace(as_dict=lambda r=r: r) for r in self._rows]
 
 
@@ -366,7 +366,7 @@ def live_agent(monkeypatch):
     def ask_agent(question, role=None):
         calls.append(question)
         return {"answer": f"Answer to {question}", "sql": "", "metric_used": [], "verified_query_used": False,
-                "tools_used": [], "tables": [], "warnings": [], "status": "ok", "raw": {}, "source": "live"}
+                "tools_used": [], "tables": [], "warnings": [], "status": "completed", "raw": {}, "source": "live"}
 
     monkeypatch.setattr(forge_data, "ask_agent", ask_agent)
     return calls

@@ -90,6 +90,9 @@ instructions:
     Always state the period the numbers cover (for example "last 12 months, by ship date" or
     "latest inventory snapshot").
     For rankings and long lists, show at most the top 10 rows and say how many there are in all.
+    For a question with several parts, answer each part separately: start each with the part
+    itself in bold on its own line (for example **How many shipments did we send in the last
+    12 months?**), then its answer in one or two sentences. Keep the parts in the order asked.
     Answer in the language of the question.
     Never include an e-mail address, a credit limit, payment terms, a contract price or a unit
     cost in an answer.

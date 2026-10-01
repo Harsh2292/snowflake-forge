@@ -61,3 +61,17 @@ QUALIFY ROW_NUMBER() OVER (ORDER BY RUN_TS DESC) = 1;
 -- FROM TABLE(SNOWFLAKE.LOCAL.GET_AI_EVALUATION_DATA('SUPPLY_CHAIN_FORGE', 'SEMANTIC',
 --        'SUPPLY_CHAIN_AGENT', 'CORTEX AGENT', 'b10-native-1'))
 -- GROUP BY METRIC_NAME
+
+-- ── Step 5 (B14): the adversarial set, its own label ──────────────────────────────
+-- After reloading 10_questions.sql (40 rows, A01-A10 added) and re-creating 20_sp_run_eval.sql.
+-- Expected: {"questions": 10, "by_category": {"ADVERSARIAL": {"n": 10, ...}}}, about 3-5 minutes.
+-- Every failure names its reason: SQL generated where a refusal was expected, an e-mail
+-- address or a guard hit (instruction text, a restricted value, a false claim), a missing
+-- "not found" or "no data", or SQL that writes.
+CALL SUPPLY_CHAIN_FORGE.OPS.SP_RUN_EVAL('b14-adv', 'A%');
+
+SELECT QUESTION_ID, EXPECTED_BEHAVIOUR, OBSERVED_BEHAVIOUR, PASSED, FAIL_REASON, LATENCY_MS, ANSWER_TEXT, AGENT_SQL
+FROM SUPPLY_CHAIN_FORGE.OPS.EVAL_RESULTS
+WHERE RUN_LABEL = 'b14-adv'
+QUALIFY ROW_NUMBER() OVER (PARTITION BY QUESTION_ID ORDER BY RUN_TS DESC) = 1
+ORDER BY QUESTION_ID;

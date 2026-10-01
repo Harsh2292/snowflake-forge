@@ -41,10 +41,11 @@ CREATE OR REPLACE VIEW V_SUPPLIER (
                         WITH TAG (SUPPLY_CHAIN_FORGE.GOVERNED.SENSITIVITY = 'RESTRICTED',
                                   SUPPLY_CHAIN_FORGE.GOVERNED.SEMANTIC_ROLE = 'EXCLUDE')
                         COMMENT 'Commercial payment terms, masked for non-buyers (LFA1.ZTERM)',
-    email               WITH TAG (SUPPLY_CHAIN_FORGE.GOVERNED.PII = 'TRUE',
+    email               WITH MASKING POLICY SUPPLY_CHAIN_FORGE.GOVERNED.MASK_SUPPLIER_CONTACT
+                        WITH TAG (SUPPLY_CHAIN_FORGE.GOVERNED.PII = 'TRUE',
                                   SUPPLY_CHAIN_FORGE.GOVERNED.SENSITIVITY = 'CONFIDENTIAL',
                                   SUPPLY_CHAIN_FORGE.GOVERNED.SEMANTIC_ROLE = 'EXCLUDE')
-                        COMMENT 'Supplier contact email (LFA1.EMAIL)'
+                        COMMENT 'Supplier contact email, masked for non-buyers (LFA1.EMAIL; CR-009)'
 )
 WITH TAG (SUPPLY_CHAIN_FORGE.GOVERNED.ENTITY_TYPE = 'SUPPLIER',
           SUPPLY_CHAIN_FORGE.GOVERNED.SOURCE_SYSTEM = 'SRM',
@@ -86,6 +87,8 @@ FROM SUPPLY_CHAIN_FORGE.CONFORMED.PART;
 -- 3. V_SOURCING  <- CONFORMED.SOURCING (SRM SOURCING)
 -- Only the source-list rows valid today (DATA_SPEC §5.1), so each part has
 -- exactly one current primary supplier. The validity history stays in CONFORMED.
+-- Two overlapping primaries (E11): the one that started latest is primary, the other secondary.
+-- COPY GRANTS keeps the persona and app grants made by other scripts on a re-run.
 CREATE OR REPLACE VIEW V_SOURCING (
     source_id           WITH TAG (SUPPLY_CHAIN_FORGE.GOVERNED.SEMANTIC_ROLE = 'KEY')
                         COMMENT 'Sourcing record ID (SOURCING.SOURCE_ID)',
@@ -101,12 +104,17 @@ CREATE OR REPLACE VIEW V_SOURCING (
                                   SUPPLY_CHAIN_FORGE.GOVERNED.SEMANTIC_ROLE = 'EXCLUDE')
                         COMMENT 'Contracted unit price USD, masked for non-buyers (SOURCING.CONTRACT_PRICE in WAERS, converted)'
 )
+COPY GRANTS
 WITH TAG (SUPPLY_CHAIN_FORGE.GOVERNED.ENTITY_TYPE = 'SOURCING',
           SUPPLY_CHAIN_FORGE.GOVERNED.SOURCE_SYSTEM = 'SRM',
           SUPPLY_CHAIN_FORGE.GOVERNED.SENSITIVITY = 'RESTRICTED')
 COMMENT = 'Governed supplier-to-part sourcing contracts valid today, from CONFORMED.SOURCING (SRM SOURCING)'
 AS
-SELECT source_id, supplier_id, part_id, is_primary, contract_price
+SELECT source_id, supplier_id, part_id,
+       -- E11: of the primaries valid today, the latest-starting one wins
+       is_primary AND ROW_NUMBER() OVER (PARTITION BY part_id, is_primary
+                                         ORDER BY valid_from DESC, source_id DESC) = 1 AS is_primary,
+       contract_price
 FROM SUPPLY_CHAIN_FORGE.CONFORMED.SOURCING
 WHERE valid_from <= CURRENT_DATE()
   AND (valid_to IS NULL OR valid_to >= CURRENT_DATE());

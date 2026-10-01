@@ -40,7 +40,10 @@ def test_sis_environment_comes_from_deploy_sis_to_the_stage_root():
 
 def test_secrets_and_keys_are_never_uploaded(tmp_path):
     (tmp_path / ".streamlit").mkdir()
-    for name in ["streamlit_app.py", ".streamlit/secrets.toml", "rsa_key.p8", "key.pem", "x.key"]:
+    for name in ["streamlit_app.py", ".streamlit/secrets.toml", "rsa_key.p8", "key.pem", "x.key",
+                 # review #18: case and other key/secret formats
+                 "KEY.PEM", "Rsa_Key.P8", "cert.p12", "cert.PFX", ".env", ".env.local", "credentials.json",
+                 "rsa_key_backup.txt", ".streamlit/Secrets.TOML"]:
         (tmp_path / name).write_text("x", encoding="utf-8")
     uploaded = {f.as_posix() for f in deploy_app.app_files(tmp_path)}
     assert uploaded == {"streamlit_app.py", "environment.yml"}

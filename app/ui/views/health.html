@@ -27,6 +27,7 @@ function render() {
       <span class="row gap12" style="font-weight:600">${icon(ok ? 'check' : 'cross', 24, ok ? 'var(--good)' : 'var(--critical)')}${D.passing} of ${D.scored} checks passing</span>
       <span class="small ink2" style="font-size:15px">Last checked ${esc(D.checked)}</span>
     </section>
+    ${D.stale_note ? `<div class="well small" data-stale="1">${icon('info', 16)} ${esc(D.stale_note)}</div>` : ''}
     <section class="card" style="padding:6px 28px">${D.checks.map((c, i) => row(c, i === D.checks.length - 1)).join('')}</section>
     ${tables()}
   </div>`;

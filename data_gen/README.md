@@ -12,7 +12,8 @@ Code; **run by CoCo** (Claude Code has no Snowflake access).
 | `10_sp_generate_data.sql` | `OPS.SP_GENERATE_DATA(TARGET_DB, SCALE_FACTOR, SEED, END_DATE)`: the clean load | ACCOUNTADMIN |
 | `20_sp_inject_mess.sql` | `OPS.SP_INJECT_MESS(TARGET_DB, SEED, END_DATE)`: the §4 defects, exact counts | ACCOUNTADMIN |
 | `30_sp_gen_self_checks.sql` | `OPS.SP_GEN_SELF_CHECKS(TARGET_DB)`: a table of checks | ACCOUNTADMIN |
-| `99_run.sql` | the calls: a dry run at SF 0.01 (twice), then SF 1 | ACCOUNTADMIN |
+| `40_sp_append_day.sql` | `OPS.SP_APPEND_DAY(TARGET_DB, SCALE_FACTOR, SEED, NEW_END_DATE)`: adds every business day up to `NEW_END_DATE` (the nightly feed, DATA_SPEC §7.1a): new orders, shipments leaving and arriving, status versions, the day's stock and FX, with the §4 mess on new rows. Idempotent; one transaction per day | ACCOUNTADMIN |
+| `99_run.sql` | the calls: a dry run at SF 0.01 (twice), then SF 1; Step 3: the day-append on a clone, its checks, then production | ACCOUNTADMIN |
 
 **Order on an empty account**:
 1. CoCo's `sql/01_setup` (database, roles, warehouse)

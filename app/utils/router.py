@@ -437,9 +437,27 @@ def _enumerated(text: str):
     return parts
 
 
+_QUOTES = "\"'“”‘’"
+_QUESTION_START = re.compile(r"^(what|which|who|whom|whose|when|where|why|how|is|are|was|were|do|does|did|can|could|"
+                             r"should|show|list|give|tell|compare)\b", re.I)
+
+
+def _unquote(piece: str) -> str:
+    return piece.strip().strip(_QUOTES).strip()
+
+
 def _questions(text: str) -> list[str]:
-    pieces = re.split(r"(?<=\?)\s+", text)
-    return pieces if all(p.rstrip().endswith("?") for p in pieces) else []
+    """Back-to-back questions, each ending in "?" (a closing quote after it is fine)."""
+    pieces = [_unquote(p) for p in re.split(rf"(?<=\?)[{_QUOTES}]?\s+", text)]
+    return pieces if all(p.endswith("?") for p in pieces if p) else []
+
+
+def _lines(text: str) -> list[str]:
+    """One question per line (1 Oct: two questions on two lines, the first without "?")."""
+    lines = [_unquote(line) for line in text.splitlines() if line.strip()]
+    if len(lines) > 1 and all(line.endswith("?") or _QUESTION_START.match(line) for line in lines):
+        return lines
+    return []
 
 
 def _conjoined(text: str) -> list[str]:
@@ -453,7 +471,7 @@ def split(question: str) -> list[str]:
     text = (question or "").strip()
     if _enumerated(text) is None:
         return [text]
-    for splitter in (_enumerated, lambda t: t.split(";"), _questions,
+    for splitter in (_enumerated, lambda t: t.split(";"), _lines, _questions,
                      lambda t: re.split(r"\s+and also\s+", t), _conjoined):
         parts = [p.strip() for p in splitter(text) if p.strip()]
         if len(parts) > 1:
@@ -501,7 +519,8 @@ INSTANT_LABEL = "Instant answer · governed semantic view"
 def _wording(dimension: str) -> tuple[str, str]:
     """(singular, plural) for sentences: plants.plant_region → region; plants.plant_name →
     plant; customers.customer_region → customer region (plain "region" means the plant's)."""
-    words = DIMENSION_WORDING.get(dimension) or _remainder(dimension)
+    preferred = next((word for word, d in config.DIMENSION_TIEBREAK.items() if d == dimension), None)
+    words = DIMENSION_WORDING.get(dimension) or preferred or _remainder(dimension)  # "quarter", not "year quarter"
     if words == "name":
         words = _entity_singular(_entity(dimension))
     shared = sum(_remainder(d) == words for d in _CONTRACT_DIMENSIONS) > 1
@@ -597,7 +616,10 @@ def run_parallel(jobs: list, max_workers: int) -> list:
     if not jobs:
         return []
 
+    visitor = forge_data.current_visitor()  # thread-local: hand it to each worker
+
     def timed(job):
+        forge_data.set_visitor(visitor)
         start = time.perf_counter()
         value = job()
         return value, time.perf_counter() - start, forge_data.pop_notices()

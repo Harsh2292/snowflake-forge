@@ -1,19 +1,74 @@
+<style>
+/* Answer charts (1 Oct redesign): one hue, thin marks with 4px rounded data-ends, recessive
+   hairline axes, values in text tokens. Bars match Explore; periods are columns. */
+.qa-chart { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.qa-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.qa-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+.qa-note { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.qa-bars { display: flex; flex-direction: column; gap: 2px; }
+.qa-row { display: grid; grid-template-columns: minmax(90px, 200px) minmax(0, 1fr) 84px; align-items: center; gap: 14px;
+  padding: 5px 8px; border-radius: 10px; }
+.qa-row:hover { background: var(--raised); }
+.qa-name { font-size: 14px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qa-track { position: relative; height: 18px; }
+.qa-track::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.qa-fill { position: absolute; left: 0; top: 0; height: 18px; border-radius: 0 4px 4px 0; background: var(--bar);
+  transition: width .5s cubic-bezier(.2,.7,.2,1); }
+.qa-row:hover .qa-fill { filter: brightness(1.12); }
+.qa-v { font-size: 14px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.qa-axis { display: grid; grid-template-columns: minmax(90px, 200px) minmax(0, 1fr) 84px; gap: 14px; padding: 6px 8px 0;
+  font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.qa-axis .ticks { display: flex; justify-content: space-between; }
+.qa-cols { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 0 4px; border-bottom: 1px solid var(--line); }
+.qa-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%;
+  gap: 6px; border-radius: 8px 8px 0 0; position: relative; }
+.qa-col:hover { background: var(--raised); }
+.qa-col .qa-cv { font-size: 12px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; visibility: hidden; }
+.qa-col.lbl .qa-cv, .qa-col:hover .qa-cv { visibility: visible; }
+.qa-col .qa-bar { width: min(24px, 70%); border-radius: 4px 4px 0 0; background: var(--bar); min-height: 2px; }
+.qa-col.last .qa-bar { background: var(--blue); }
+.qa-labels { display: flex; gap: 6px; padding: 6px 4px 0; }
+.qa-labels span { flex: 1; text-align: center; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qa-caption { margin-top: 8px; font-size: 12px; color: var(--muted); }
+</style>
 <script>
 const D = DATA;
 ACTIONS.tab = (t) => setState({ tab: t });
 
-function miniChart(chart) {
-  if (!chart) return '';
-  const max = Math.max(...chart.rows.map((r) => r.value).filter((v) => !missing(v))) * 1.15;
-  const h = (v) => missing(v) ? 0 : (v / max) * 120;
-  return `<div class="stack gap8 mt16" role="img" aria-label="${esc(chart.title)}">
-    <div style="display:flex;align-items:flex-end;gap:14px;height:150px;padding:0 4px;border-bottom:1px solid var(--line)">
-      ${chart.rows.map((r) => `<div class="stack" style="flex:1;align-items:center;justify-content:flex-end;height:100%;gap:6px" title="${esc(r.label)}: ${missing(r.value) ? MISSING_NOTE : fmt(chart.format, r.value)}">
-        <span class="small num" style="font-weight:600">${valueHtml(chart.format, r.value)}</span>
-        <span style="width:min(56px,100%);height:${h(r.value)}px;background:var(--bar);border-radius:4px 4px 0 0"></span></div>`).join('')}
-    </div>
-    <div style="display:flex;gap:14px;padding:0 4px">${chart.rows.map((r) => `<span class="small ink2" style="flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.label)}</span>`).join('')}</div>
-    ${chart.total > chart.rows.length ? `<span class="small muted">${chart.rows.length} of ${chart.total} rows</span>` : ''}
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const k of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (k * p >= v) return k * p;
+  return 10 * p;
+}
+
+function chartHtml(c) {
+  const known = c.rows.map((r) => r.value).filter((v) => !missing(v));
+  const top = Math.max(...known);
+  const max = c.format === 'percent' && top <= 1 ? 1 : niceMax(top * 1.05);
+  const pct = (v) => missing(v) ? 0 : Math.max(0, Math.min(100, (v / max) * 100));
+  const tip = (r) => `${esc(r.label)}: ${missing(r.value) ? MISSING_NOTE : fmt(c.format, r.value)}`;
+  const note = c.total > c.rows.length ? `${c.rows.length} of ${c.total} shown` : '';
+  const head = `<div class="qa-head"><span class="qa-title">${esc(c.title)}</span><span class="qa-note">${note}</span></div>`;
+  if (c.kind === 'columns') {
+    // label the latest, the highest and the lowest; the rest show on hover
+    const hi = Math.max(...known), lo = Math.min(...known), lastIdx = c.rows.length - 1;
+    const labelled = (r, i) => i === lastIdx || r.value === hi || r.value === lo;
+    return `<div class="qa-chart" role="img" aria-label="${esc(c.title)}">${head}
+      <div class="qa-cols">${c.rows.map((r, i) => `<div class="qa-col ${labelled(r, i) ? 'lbl' : ''} ${i === lastIdx ? 'last' : ''}" title="${tip(r)}">
+        <span class="qa-cv">${valueHtml(c.format, r.value)}</span>
+        <span class="qa-bar" style="height:${(pct(r.value) * 1.3).toFixed(1)}px"></span></div>`).join('')}</div>
+      <div class="qa-labels">${c.rows.map((r) => `<span>${esc(r.label)}</span>`).join('')}</div>
+      <div class="qa-caption">${esc(c.axis)}</div></div>`;
+  }
+  const ticks = [0, 0.5, 1].map((f) => c.format === 'percent' && max === 1 ? Math.round(f * 100) + '%'
+      : fmt(c.format, f * max).replace('.00', '').replace(/\.0$/, ''));
+  return `<div class="qa-chart" role="img" aria-label="${esc(c.title)}">${head}
+    <div class="qa-bars">${c.rows.map((r) => `<div class="qa-row" title="${tip(r)}">
+      <span class="qa-name">${esc(r.label)}</span>
+      <span class="qa-track"><span class="qa-fill" style="width:${pct(r.value).toFixed(2)}%"></span></span>
+      <span class="qa-v">${valueHtml(c.format, r.value)}</span></div>`).join('')}</div>
+    <div class="qa-axis"><span>${esc(c.axis)}</span><div class="ticks">${ticks.map((t) => `<span>${t}</span>`).join('')}</div><span></span></div>
   </div>`;
 }
 
@@ -35,11 +90,11 @@ function render(s) {
       <span style="font-size:15px;font-weight:600;color:var(--blue)">${esc(d.formula)}</span><span class="small ink2" style="line-height:1.55">${esc(d.definition)}</span>
       <span class="small muted">${esc(d.id)} in ${esc(D.semantic_view)}</span></div>`).join('<hr class="rule" style="margin:14px 0">');
   else if (s.tab === 'raw') body = `<pre class="well" style="margin:0;overflow:auto;max-height:230px;font-size:12px;line-height:1.5">${esc(D.raw)}</pre>`;
-  else body = `${prose(D.answer)}${D.health ? `<div class="well small mt16">${icon('info', 16)} ${esc(D.health)}</div>` : ''}${miniChart(D.chart)}
+  else body = `${prose(D.answer)}${D.health ? `<div class="well small mt16">${icon('info', 16)} ${esc(D.health)}</div>` : ''}${(D.charts || []).map(chartHtml).join("")}
       ${D.warnings.map((w) => `<div class="well small mt16">${icon('info', 16)} ${esc(w)}</div>`).join('')}`;
 
   return `<div class="root stack gap12" style="padding:4px 16px 26px">
-    ${D.question ? `<div class="row end"><span style="background:var(--sel);padding:12px 18px;border-radius:18px 18px 4px 18px;font-size:16px;max-width:80%">${esc(D.question)}</span></div>` : ''}
+    ${D.question ? `<div class="row end"><span style="background:var(--sel);padding:12px 18px;border-radius:18px 18px 4px 18px;font-size:16px;max-width:80%;white-space:pre-wrap">${esc(D.question)}</span></div>` : ''}
     <article class="card stack gap16" style="border-radius:20px" data-route="${D.instant ? 'instant' : 'agent'}">
       ${D.part ? `<span class="small ink2" data-part="1">${esc(D.part)}</span>` : ''}
       <div class="row between gap12" style="flex-wrap:wrap">

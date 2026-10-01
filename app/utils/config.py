@@ -249,6 +249,7 @@ ASK_PAUSE_SECONDS = 600
 # itself (utils/vocabulary.json, built from semantic/01 by tests/tools/build_vocabulary.py);
 # only what the view doesn't say is kept here.
 ASK_SHORTCUT = True
+ASK_STREAM = True  # CR-008: stream agent answers over REST; `[forge] stream = false` uses §5.3 only
 EXTRA_METRIC_PHRASES = {  # common phrasings that aren't view synonyms
     "on_time_delivery_rate": ["on time", "on time performance", "on time rate"],
     "days_of_inventory": ["inventory cover"],
@@ -259,7 +260,11 @@ DIMENSION_TIEBREAK = {
     "region": "plants.plant_region",
     "quarter": "orders.order_year_quarter",
 }
-SCREEN_CACHE_SECONDS = 12 * 3600  # demo data is loaded once; shared by every visitor
+SCREEN_CACHE_SECONDS = 12 * 3600  # shared by every visitor; keyed on the data version below
+# The data version (review #5, 1 Oct): every screen, instant-answer and agent-answer cache is
+# keyed on the data's as-of date, re-read this often, so the nightly load rolls them all over
+# together and no two screens show different data days.
+AS_OF_CACHE_SECONDS = 15 * 60
 STATEMENT_TIMEOUT_SECONDS = 120   # no query or agent call runs on unbounded
 LOGIN_TIMEOUT_SECONDS = 20
 LOGIN_RETRY_SECONDS = 60          # after a failed login, fall back at once for this long

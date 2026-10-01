@@ -9,7 +9,15 @@
 > CoCo implements the Snowflake side to match this exactly.
 > Claude Code implements the app side to match this exactly.
 >
-> **Version**: 1.6 · **Frozen**: 2026-09-30 (v1.5: 2026-09-29)
+> **Version**: 1.8 · **Frozen**: 2026-10-01 (v1.7: 2026-10-01, v1.6: 2026-09-30, v1.5: 2026-09-29)
+>
+> **v1.8 change** (accepted by the user 2026-10-01):
+> - **CR-009**: §6, `V_SUPPLIER.email` is masked (`*** MASKED ***`) for everyone except
+>   `BUYER_ROLE`, `FORGE_ADMIN` and `ACCOUNTADMIN`. No column or shape changes.
+>
+> **v1.7 change** (accepted by the user 2026-10-01):
+> - **CR-008**: §5.3b, the app may stream the agent's answer over the REST `agent:run` API
+>   (Server-Sent Events); §5.3 (`DATA_AGENT_RUN`) stays as the fallback. Additive.
 >
 > **v1.6 change** (accepted by the user 2026-09-30):
 > - **CR-007**: §5.3, the agent call binds the whole request JSON as the single `?`
@@ -271,6 +279,12 @@ Build it with `json.dumps(...)` in Python, which escapes the question. In Snowfl
 Scripting, build it first with `req := (SELECT TO_JSON(OBJECT_CONSTRUCT(…, :question …)));`,
 then pass `:req`. The response shape is unchanged (art 07).
 
+### 5.3b Agent invocation, streaming (v1.7, CR-008)
+
+The app's Ask may stream instead: `POST /api/v2/databases/SUPPLY_CHAIN_FORGE/schemas/SEMANTIC/agents/SUPPLY_CHAIN_AGENT:run`
+with the same `messages` and `"stream": true`, read as Server-Sent Events, on the app's existing
+session (no second login). §5.3 stays the fallback. Details: CR-008 (§11).
+
 ### 5.4 Persona sample data & metric procedures — call a procedure, do NOT use `USE ROLE`
 
 ```sql
@@ -326,6 +340,7 @@ is computed under the §3a time rule (CR-006); the shape and columns are unchang
 | `V_PART.unit_cost` | `NULL` | visible | `NULL` |
 | `V_SOURCING.contract_price` | `NULL` | visible | `NULL` |
 | `V_SUPPLIER.payment_terms` | `*** RESTRICTED ***` | visible | `*** RESTRICTED ***` |
+| `V_SUPPLIER.email` | `*** MASKED ***` | visible | `*** MASKED ***` |
 | `V_CUSTOMER.customer_name` | visible | `*** MASKED ***` | visible |
 | `V_CUSTOMER.email` | visible | `*** MASKED ***` | visible |
 | `V_CUSTOMER.credit_limit` | `NULL` | `NULL` | `NULL` |
@@ -343,7 +358,7 @@ This is structural, not coincidental: **no canonical metric references a masked 
 | `avg_landed_cost` | `freight_cost`, `duty_cost`, `handling_cost` | No |
 
 Masked columns (`unit_cost`, `contract_price`, `payment_terms`, `customer_name`,
-`email`, `credit_limit`) appear in **no** metric formula. That is why the numbers can be
+`email` (customer and supplier), `credit_limit`) appear in **no** metric formula. That is why the numbers can be
 identical while visibility differs.
 
 ---
@@ -817,7 +832,73 @@ first with `req := (SELECT TO_JSON(OBJECT_CONSTRUCT(…, :question …)));`, the
 
 ---
 
-_Open change requests: none. CR-007 accepted 2026-09-30 (§5.3 body to v1.6, CoCo applies). CR-006 accepted 2026-09-29 (v1.5)._
+### CR-008 — §5.3b: stream the agent's answer over the REST API (additive)
+
+**Requested by**: CoCo (B15, 2026-10-01), at the user's request
+**Status**: **ACCEPTED** by the user, 2026-10-01 ("do this", lever 5 of the speed review).
+Contract **v1.7**. Claude Code builds it; CoCo checks it live.
+
+**Reason**: the agent takes ~9–13 s per question (p50 12.3 s in art 08). Per the traces
+(`OPS.V_AGENT_REQUESTS`, 23 questions on 1 Oct), that's mostly LLM time: writing the answer 5.1 s,
+follow-up suggestions 3.7 s, planning 2.0 s. The SQL itself takes 0.07 s, and a bigger warehouse
+didn't help (XS vs SMALL, `B14_security_ops.md`). Streaming doesn't shorten the total, but the
+answer appears as it's written instead of after ~10 s of silence. `DATA_AGENT_RUN` (§5.3) can't
+stream: it returns one JSON response.
+
+**Change (additive; §5.3 stays as it is):**
+- **§5.3b, the streaming path (the app's Ask, primary):**
+  `POST https://<account>.snowflakecomputing.com/api/v2/databases/SUPPLY_CHAIN_FORGE/schemas/SEMANTIC/agents/SUPPLY_CHAIN_AGENT:run`,
+  body `{"messages": [...same as §5.3...], "stream": true}`, `Accept: text/event-stream`. The
+  response is Server-Sent Events. Show the answer text as it arrives. Build the same parsed
+  result as §5.3 when it ends: tool SQL, suggestions, status.
+- **Auth:** reuse the app's existing Snowflake session (the key-pair login as `FORGE_APP_SVC`),
+  e.g. its session token, so there's **no second login**. `OPS.FORGE_APP_SVC_AUTH` allows only
+  `KEYPAIR` through `DRIVERS`, so a separate REST login with a fresh JWT may be refused. If the
+  session token can't be used, tell CoCo, and CoCo will adjust the policy and re-test it.
+- **§5.3 (`DATA_AGENT_RUN`) stays:** the fallback when streaming fails (network, auth, an
+  error event), and the path `OPS.SP_RUN_EVAL` keeps using. (The C14 instant shortcut calls
+  no agent at all.)
+- The role, agent FQN, grants, limits (`ask_guard`), cache, router and the "Ask is paused"
+  message are unchanged. A streamed answer counts once against the Ask limits, as now.
+
+**Impact**:
+- Claude Code: `app/utils/forge_data.py` (a streaming `ask_agent` path + fallback), `app/ui/screens/ask.py`
+  (render tokens as they arrive), `docs/references/` (fetch the agent:run REST + SSE event
+  pages first; don't code the event names from memory), tests (an SSE fixture, the fallback).
+- CoCo: re-check Ask on the public link (latency to first text, final answer equals the
+  `DATA_AGENT_RUN` answer for the 8 canonical questions), and the auth policy if needed.
+- Nothing in Snowflake changes.
+
+---
+
+_Open change requests: none. CR-009 accepted 2026-10-01 (v1.8, supplier e-mail masked). CR-008 accepted 2026-10-01 (v1.7, §5.3b streaming, additive). CR-007 accepted 2026-09-30 (§5.3 body to v1.6, CoCo applies). CR-006 accepted 2026-09-29 (v1.5)._
+
+### CR-009 — §6 / §7: mask the supplier contact e-mail (`V_SUPPLIER.email`)
+
+**Requested by**: Claude Code (2026-10-01), from an external review (Codex) that Claude Code
+verified against the SQL
+**Reason**: `V_SUPPLIER.email` is tagged `PII = 'TRUE'` and `SENSITIVITY = 'CONFIDENTIAL'`
+(`sql/04_governance/01_tags.sql`, `03_governed_views.sql`), but no masking policy is attached:
+a tag alone masks nothing. `FORGE_APP_ROLE`, the public link's role, has SELECT on `V_SUPPLIER`
+(`sql/05_app_access/01`). Every other personal or commercial column already has a policy (§6),
+and the public role sees customer e-mail as `*** MASKED ***`.
+- **Exposure today is low:** the semantic view doesn't expose the column, so the agent's
+  Analyst can't select it. Only someone with the service key could query it.
+- **Still a governance gap:** the tag says PII, but the data isn't protected.
+
+**Proposed change**: attach a policy to `V_SUPPLIER.email`, visible to `FORGE_ADMIN`,
+`BUYER_ROLE` (procurement owns supplier contacts) and `ACCOUNTADMIN`; masked as
+`*** MASKED ***` for `PLANNER_ROLE`, `LOGISTICS_ROLE`, `FORGE_APP_ROLE` and every other role.
+§6 gains the row `V_SUPPLIER.email: Planner *** MASKED *** · Buyer visible · Logistics *** MASKED ***`.
+**Impact on the other agent**:
+- CoCo: a policy and one `ALTER VIEW … MODIFY COLUMN email SET MASKING POLICY`, then re-check
+  art 03 and 04 (no shape change).
+- Claude Code: `config.MASKING_MATRIX` + the governance tests.
+- Nothing the app shows changes: no screen reads supplier e-mail.
+
+**Status**: ACCEPTED (user, 2026-10-01). Contract **v1.8**. CoCo applied it live 2026-10-01.
+
+---
 
 <!--
 To propose a change, append:

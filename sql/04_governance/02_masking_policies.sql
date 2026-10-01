@@ -51,3 +51,15 @@ RETURNS NUMBER(15,2) ->
         ELSE NULL
     END
 COMMENT = 'Restricts customer credit limits to administrator role only';
+
+-- 5. MASK_SUPPLIER_CONTACT: Protects supplier contact e-mail (CR-009, 2026-10-01)
+-- Visible to: FORGE_ADMIN, BUYER_ROLE, ACCOUNTADMIN (procurement owns supplier contacts)
+-- Masked as: '*** MASKED ***' for every other role, incl. PLANNER_ROLE, LOGISTICS_ROLE and
+-- the public app's FORGE_APP_ROLE
+CREATE OR REPLACE MASKING POLICY MASK_SUPPLIER_CONTACT AS (val VARCHAR)
+RETURNS VARCHAR ->
+    CASE
+        WHEN CURRENT_ROLE() IN ('FORGE_ADMIN', 'BUYER_ROLE', 'ACCOUNTADMIN') THEN val
+        ELSE '*** MASKED ***'
+    END
+COMMENT = 'Masks supplier contact e-mail from everyone but procurement and admins (CR-009)';

@@ -227,7 +227,8 @@ BEGIN
                             ELSE 'FAIL' END AS FRESH_STATUS,
                        COALESCE(c.CHECKS, ARRAY_CONSTRUCT()) AS CHECKS,
                        COALESCE(c.CHECKS_NOT_OK, ARRAY_CONSTRUCT()) AS CHECKS_NOT_OK,
-                       COALESCE(c.CHECK_SEV, 0) AS CHECK_SEV,
+                       -- no configured checks is not a clean bill of health (review #11): UNKNOWN
+                       IFF(c.ENTITY IS NULL, 1, c.CHECK_SEV) AS CHECK_SEV,
                        COALESCE(c.EDGE_CASES, 0) AS EDGE_CASES,
                        COALESCE(c.REPAIRS_LEFT, 0) AS REPAIRS_LEFT,
                        COALESCE(c.WARNS, 0) AS WARNS,

@@ -131,6 +131,7 @@ class ReplaySession:
     def __init__(self, persona_outputs: dict | None = None, metric_values: dict | None = None):
         self.results = {}
         self.query_tag = None
+        self.tags = []  # QUERY_TAG of every statement, in order
         for out in (persona_outputs or {}).values():
             self.results[f"CALL {out['procedure']}"] = [
                 {c["name"]: _typed(row[c["name"]], c["type"]) for c in out["result_columns"]}
@@ -183,21 +184,23 @@ class ReplaySession:
             request = json.loads(params[0])  # a question bound on its own isn't JSON: fails here
             assert request["messages"][0]["content"][0]["type"] == "text", request
             self.agent_requests.append(params[0])
-            return _Captured([{"RESPONSE": json.dumps(self.agent_response)}])
+            return _Captured([{"RESPONSE": json.dumps(self.agent_response)}], self.tags)
         if sql == forge_data.DATA_HEALTH_SQL and getattr(self, "health", None):
             if params[0] not in self.health:
                 raise RuntimeError(f"SP_DATA_HEALTH({params[0]!r}) not captured in docs/artifacts")
-            return _Captured([{"SP_DATA_HEALTH": json.dumps(self.health[params[0]])}])
+            return _Captured([{"SP_DATA_HEALTH": json.dumps(self.health[params[0]])}], self.tags)
         if sql not in self.results:
             raise RuntimeError(f"not captured in docs/artifacts: {sql}")
-        return _Captured(self.results[sql])
+        return _Captured(self.results[sql], self.tags)
 
 
 class _Captured:
-    def __init__(self, rows: list[dict]):
+    def __init__(self, rows: list[dict], tags=None):
         self.rows = rows
+        self.tags = tags if tags is not None else []
 
-    def collect(self):
+    def collect(self, statement_params=None):
+        self.tags.append((statement_params or {}).get("QUERY_TAG"))
         return [_Row(row) for row in self.rows]
 
 

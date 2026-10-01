@@ -6,7 +6,7 @@
 | **Milestone** | Replan Day 3. **In the handoff lock by the end of 1 Oct** (CoCo's ask, user-approved) |
 | **Prerequisite** | C08 generator (DONE, run at B08c); `docs/DATA_SPEC.md` §7.1a (added 30 Sep), §3, §4, §6 |
 | **Writes** | new `data_gen/40_sp_append_day.sql` (`OPS.SP_APPEND_DAY`), `data_gen/30_sp_gen_self_checks.sql` (an append check), `data_gen/99_run.sql` (a dry-run step), `data_gen/README.md`, `tests/unit/test_data_gen_sql.py` |
-| **Status** | **Part A ✅ READY 2026-09-30** (the generator range-join fix, in the lock for the cutover). **Part B (the day-append) ⏸ deferred by the user until after the account switch.** CoCo chose A over the nightly reload (`runs/B12a_reload_test.md`) |
+| **Status** | **Part A ✅ DONE** (`runs/C17a_run.md`). **Part B ✅ DONE 2026-10-01** (`runs/C17b_run.md`: clone proof, production caught up, nightly task `OPS.FORGE_NIGHTLY_APPEND` 05:30 UTC). Follow-up in the lock: `data_gen/30_sp_gen_self_checks.sql` learns about appended days (LOAD_TS cap, `APPEND_ROWS`, cross-checks on the generator's load only) |
 
 ---
 
@@ -136,3 +136,31 @@ the two ever drift.
 
 **Estimate:** 4–6 hours (the lifecycle logic is the bulk). It fits 1 Oct together with C13;
 C05 and C14 follow on 2 Oct.
+
+## Part B, as built (2026-10-01)
+
+- **`OPS.SP_APPEND_DAY`**, in `data_gen/40_sp_append_day.sql`:
+  - **The anchor:** the generator's END_DATE from `OPS.GEN_LOG` (same seed and scale; this
+    database's run first, else the one a clone came from). The order calendar is extended past
+    it with the same weights and the same total, so order numbers continue exactly.
+  - **Per new business date D:** the last 40 days of orders are re-derived with verbatim copies
+    of the generator's TMP_O / TMP_L / TMP_S (shipments for every order that isn't cancelled,
+    with no `dptbg <= L` filter). The state at L = D is compared with L = D − 1, and only the
+    differences are written: new orders and lines, ship events (VBAK, VBAP and new VTTK rows),
+    deliveries and newly overdue shipments (VTTK versions), status changes (VBAK versions),
+    stock (3,600 rows), and FX (business days).
+  - **Versions copy the latest existing row** (keyed on `UPPER(TRIM(VBELN))` and `LINE_ID`;
+    TKNUM by its rank within order and plant), so earlier mess carries over.
+  - **Mess on new rows:** M03 (status, priority, carrier), E01, E04, E05, E06 carried. Not
+    applied: M01, M02, E09 (documented).
+  - **One transaction per day, VBAK last.** All derivation (temp-table DDL) happens before
+    `BEGIN TRANSACTION`; `ROLLBACK` in the handler.
+- **Tests** (`tests/unit/test_data_gen_sql.py`, 39):
+  - every generator formula line the append needs appears in it verbatim (>60 lines)
+  - no UPDATE/DELETE/TRUNCATE/MERGE on source tables
+  - idempotence guard; one transaction with VBAK last; LOAD_TS = D + 1
+  - anchored on GEN_LOG, no CURRENT_DATE
+- **`99_run.sql` Step 3:** a clone run (1 day, the same day again, 3 days), checks with expected
+  results, production catch-up, then the task (CoCo).
+- **Not verifiable offline:** whether Snowflake compiles and runs it, and the real per-day
+  counts. That's CoCo's clone run.

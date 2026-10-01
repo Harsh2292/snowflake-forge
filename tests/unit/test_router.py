@@ -184,6 +184,11 @@ def test_no_false_shortcut_on_the_30_evaluation_questions(monkeypatch):
     ("What is fill rate by region and on-time delivery by plant?",
      ["What is fill rate by region", "on-time delivery by plant"]),
     ("What is our OTD and fill rate?", ["What is our OTD", "fill rate"]),
+    # 1 Oct, the user: one question per line (the first without "?"), and "?" before a quote
+    ("How many shipments did we send in the last 12 months\nWhat is the average supplier lead time by supplier tier?",
+     ["How many shipments did we send in the last 12 months", "What is the average supplier lead time by supplier tier?"]),
+    ('How many shipments did we send in the last 12 months?" What is the average supplier lead time by supplier tier?"',
+     ["How many shipments did we send in the last 12 months?", "What is the average supplier lead time by supplier tier?"]),
 ])
 def test_multi_part_questions_split_on_clear_boundaries(question, parts):
     assert router.split(question) == parts
@@ -197,6 +202,7 @@ def test_multi_part_questions_split_on_clear_boundaries(question, parts):
     "fill rate by region and plant",
     "How many orders are open and shipped?",
     "What is our fill rate?",
+    "Show fill rate by region\nfor the last two quarters",   # a line that continues the first
 ])
 def test_everything_else_stays_one_question(question):
     assert router.split(question) == [question.strip()]
@@ -400,10 +406,27 @@ def test_ask_is_paused_with_a_plain_message_and_instant_answers_keep_working(for
     at = _app()
     at.chat_input[0].set_value("How many suppliers do we have?").run()
     page = _markdown(at)
+    assert not at.exception  # review #1: a paused first question renders, never raises
     assert at.session_state["chat"] == []
     assert "Ask is paused" in page and "still answer instantly" in page
     assert 'data-source="mock_fallback"' not in page  # not the fallback banner
     at.chat_input[0].set_value(config.CANONICAL_QUESTIONS[0]).run()  # still answers
+    assert at.session_state["chat"][0]["parts"][0]["result"]["route"] == "instant"
+
+
+@pytest.mark.parametrize("forge", ["replay"], indirect=True)
+def test_a_refused_first_question_shows_the_limit_and_raises_nothing(fake_agent):
+    """Review #1 (1 Oct): Codex said a refused first question crashes the screen. It
+    doesn't; this keeps it that way. The visit's question allowance is 0, so the very
+    first agent question is refused before any call is made."""
+    at = _app({"forge": {"per_session": 0}})
+    at.chat_input[0].set_value("How many suppliers do we have?").run()
+    assert not at.exception
+    assert fake_agent == []
+    assert at.session_state["chat"] == []
+    assert "new questions per visit" in _markdown(at)
+    at.chat_input[0].set_value(config.CANONICAL_QUESTIONS[0]).run()  # instant answers still work
+    assert not at.exception
     assert at.session_state["chat"][0]["parts"][0]["result"]["route"] == "instant"
 
 

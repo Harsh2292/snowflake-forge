@@ -245,9 +245,12 @@ when a question is ambiguous, and answering numbered multi-part questions in ord
    tools used, and its follow-up suggestions.
 
 **Guards on the public link:** an answer cache, per-visitor and global rate limits, a
-statement timeout, a warehouse resource monitor, and a monthly Cortex budget. When the budget
-is used up, the agent is switched off, and Ask says *"Ask is paused"* while instant answers
-keep working.
+statement timeout, a warehouse resource monitor, and a monthly Cortex budget. When the agent is
+refused (budget used up, or the service unavailable), Ask says *"Ask is paused"* for ten
+minutes while instant answers keep working. Two honest limits: Snowflake's budget figures lag
+actual use by up to about six hours, so spend can overshoot the cap a little before the
+agent is switched off; and the app's rate-limit counters live in the app process, so they reset
+when the app restarts.
 
 ## Results
 
@@ -397,6 +400,7 @@ a commit. Defaults are in `app/utils/config.py`.
 |---|---|---|
 | `mode` | `live` when a connection exists | `"mock"` forces the saved results |
 | `shortcut` | `true` | `false` turns off instant answers; every question goes to the agent |
+| `stream` | `true` | `false` stops streaming agent answers (REST `agent:run`); `DATA_AGENT_RUN` answers instead |
 | `cooldown_seconds` | 10 | Per visitor, the gap between two agent calls |
 | `per_session` | 10 | Agent calls per visitor session |
 | `concurrent` | 3 | Agent calls running at once, all visitors |
@@ -446,8 +450,9 @@ handoff lock), and `tasks/` (one card per track, with its gate).
   metrics.
 - **Instant answers are rule-based on purpose.** They cover known metric questions; the agent
   answers anything with a period, a comparison or free text.
-- **Agent latency.** Agent answers take about 12 s at p50, mostly orchestration time. Streaming
-  responses are on the roadmap.
+- **Agent latency.** Agent answers take about 12 s at p50 and 36.5 s at p95, mostly
+  orchestration time. Single-question answers stream as they are written (CR-008), with a
+  Stop button, so the wait is visible rather than blank.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for configurable metric definitions, enterprise
 identity, packaging, and production-scale operations.

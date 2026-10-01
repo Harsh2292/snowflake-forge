@@ -26,6 +26,121 @@
 
 ---
 
+## Session 43 — 2026-10-01 (late evening) — CoCo
+
+**Milestone**: M6 closed
+**Build steps completed**: review fixes C-1..C-4, the 3 lock rows, B13 (partial, stopped)
+**Credits used this session**: ~7 (B13 6.23 on temporary warehouses; the rest XS + 20 agent calls)
+
+### Done
+- **C-1 / CR-009** accepted (contract v1.8): `MASK_SUPPLIER_CONTACT` on `V_SUPPLIER.email`,
+  masked for Planner, Logistics, `FORGE_APP_ROLE` (150/150).
+- **C-2** `FX_RATE` USD from one branch. **C-3** `FX_MISSING` flag (0 rows).
+- **C-4** E11 resolved per date in `V_SOURCING` ("latest-starting primary wins", tested on 5
+  scenarios). Not truncation: that would drop 12 live links. `PRIMARY_DEMOTED` →
+  `PRIMARY_SUPERSEDED`.
+- Before/after byte-identical: primary hash, row counts, USD totals, 63 metrics. DQ 93/93,
+  health OK, 77 DMFs re-attached.
+- Lock rows DONE:
+  - `data_gen/30`: 106 TRUE + the known FALSE
+  - `quality/30` + `eval/20`: `b14-adv-2` 10/10
+- `pytest -m live` as `FORGE_APP_SVC` 148/148; `pytest -q` 799.
+- **B13 stopped by the user.** `sf1-xs` 70/70. The SF 50 load exposed a cartesian join in
+  `data_gen/10`: 39.6 billion rows a year, ~5 credits lost before it was found. Fixed and
+  proven byte-identical; SF 50 = 102M lines in 6.5 min; deployed. Clone and warehouses dropped.
+- Art 11 updated (F7 closed, F8, F9). Reports: `runs/B14_review_fixes_run.md`,
+  `runs/B13_partial_run.md`.
+
+### Blocked / Open
+- Claude Code: `MASKING_MATRIX` + governance tests for supplier e-mail; the `FX_MISSING` DQ check.
+- The user: push; the CR-008 live check after the redeploy.
+
+### Next action (exact)
+- 2 Oct after 05:30 UTC: `FORGE_NIGHTLY_APPEND` SUCCEEDED in `TASK_HISTORY`;
+  `SP_DATA_HEALTH('ALL')` OK as-of 2026-10-01. After judging: suspend the task and the alert.
+
+---
+
+## Session 42 — 2026-10-01 (evening) — Claude Code
+
+**Milestone**: M5 (production pass after the outside review)
+**Credits used this session**: 0 (no Snowflake access)
+
+### Done
+- **Outside review (21 findings), cross-checked first:** wrong 1, 14; partly true 6, 7, 16,
+  17, 19, 21; true the rest. The CoCo tasks C-1..C-4 were given to the user to paste (and are
+  in HANDOFF).
+- **Fixes:**
+  - **Ask:** #15 slots reserved after the instant parts; #5 caches keyed on the data version
+    (`payloads.data_version()`, AnswerCache `version`); #12/#13 `StreamInterrupted` keeps the
+    partial text, makes no second call, never caches.
+  - **Payloads:** #8 Explore quarter = year-quarter; #9 OTD formula text; #17 `_public_raw`
+    drops thinking items; #10 stale-load note on Data health.
+  - **Agent response:** #2 `pairing_warnings()`.
+  - **SQL:** #11 `quality/30` UNKNOWN when no checks are configured; #20 `eval/20` e-mail guard
+    over the full response.
+  - **Ops:** #18 `deploy_app.py` exclusions (case-insensitive; `.p12`, `.pfx`, `.env*`,
+    `credentials.json`, `rsa_key*`); #19 `keep_awake.py` fails on a settle timeout or an
+    `stException`; #16 README on the budget lag and the counters resetting.
+  - **#1:** not reproducible; now a regression test (refused + paused first question).
+- **CoCo's C17b ask:** `SP_GEN_SELF_CHECKS` learns about appended days.
+  - The `DATA_*` checks count only the generator's load.
+  - `LOAD_TS_CAP` follows the last appended day.
+  - New `APPEND_ROWS` vs the `SP_APPEND_DAY` log.
+  - CARRIER_CD variants count re-sent copies once (the C08 +1,260).
+- **Tests:** `pytest -q` 799 passed, 148 skipped; `pytest -m ui` 30/30. New:
+  `tests/unit/test_keep_awake.py`; additions in test_deploy_app, test_router, test_data_gen_sql,
+  test_quality_sql, test_eval_sql and test_production_pass.
+
+### Blocked / Open
+- **Lock:** `data_gen/30` (re-run the self-checks); `quality/30` + `eval/20` (re-create,
+  `b14-adv-2`).
+- **CoCo:** C-1..C-4, the CR-008 live check, the response-format ask.
+- **User:** CR-009 yes or no; push; `PUBLIC_APP_URL`; vault or delete `~/forge-keys`.
+- **Open:** ~5% more new orders on appended weekdays (`runs/C17b_run.md` §3d).
+
+### Next action (exact)
+- **None: the user closed the build here.** UI checked locally ("looks good"). The user's
+  pre-submission steps and what was left undone are in NEXT.md, "CLOSED".
+
+---
+
+## Session 41 — 2026-10-01 — CoCo (same conversation as Session 40, new account)
+
+**Milestone**: M6 production: the public link is live
+**Build steps completed**: B08m verification · B15a ✅ · B14 ✅ · B12a part 2 ✅ (C17b) · B15 ✅
+**Credits used**: the event account $400 → $391.13 (1 Oct, lagging). This session's own CoCo tokens bill to the old account's connection
+
+### Done
+- **B08m verification:** 122 objects + all grants diffed vs the old account (new account the
+  correct side of 2 old drifts); the app's 71 queries as `FORGE_APP_ROLE` OK. **`pytest -m live`
+  148/148 for the first time ever** (it needs the sandbox off for browser OAuth).
+- **B15a:** key on `FORGE_APP_SVC`, then rotated at the user's request (old key rejected); live
+  suite 148/148 as the app user; <https://supply-chain-forge.streamlit.app/> live (the user
+  confirmed); Ask works (incl. multi-part).
+- **B14 hardening** (`sql/06_ops/01`–`04`): Cortex AI Guardrails on; user-level auth policy
+  (KEYPAIR, DRIVERS) on the app user; ops views `V_AGENT_REQUESTS`, `V_APP_ERRORS`; hourly
+  e-mail alert `FORGE_OPS_WATCH` (test mail delivered).
+- **Speed review:** the warehouse makes no difference (0.07 s per query on XS and SMALL), so it
+  stays XS; suggestions can't be switched off by any documented setting; **CR-008 streaming
+  accepted (contract v1.7)** and handed to Claude Code.
+- **C17b run:** clone proof, production caught up, data health OK, DQ 93/93; nightly task
+  `FORGE_NIGHTLY_APPEND` 05:30 UTC (`sql/06_ops/05`).
+- **Adversarial eval** (Claude Code's A01–A10): **10/10 safe**. Multi-part answer labels added to
+  the agent.
+- **Art 11** (`11_contract_audit.md`) and the B15 card written.
+
+### Blocked / Open
+- The user ran an outside 8-area review; Claude Code cross-checks it first (CoCo changed
+  nothing for it).
+- With Claude Code: CR-008 streaming; `SP_GEN_SELF_CHECKS` for appended days.
+
+### Next action (exact)
+- 2 Oct after 05:30 UTC: `TASK_HISTORY` for `FORGE_NIGHTLY_APPEND` = SUCCEEDED, and
+  `SP_DATA_HEALTH('ALL')` = OK with the as-of date 2026-10-01 (card `B15_final_checks.md`).
+
+---
+
 ## Session 40 — 2026-09-30 (evening) — CoCo
 
 **Milestone**: M5 (quality) + M6 prep (account switch)
@@ -70,6 +185,39 @@
 ### Next action (exact)
 - In `QURFOQP-XU04029`: give the user the secrets values, then B15a when the public key
   arrives (`.agents/NEXT.md` → "CoCo → NEXT SESSION STARTS HERE").
+
+---
+
+## Session 41 — 2026-10-01 — Claude Code
+
+**Milestone**: public link + freshness
+**Build steps completed**: README · public-link key pair + fixes · Ask redesign (2 rounds) · C17 part B READY
+**Credits used this session**: 0
+
+### Done
+- `README.md` (full project README, screenshots in `assets/screenshots/`).
+- **Public link live** (https://supply-chain-forge.streamlit.app):
+  - key pair generated outside the repo; the user set the public key
+  - `forge_data.pem_text` repairs pasted keys
+- **CoCo point 2:** per-statement `QUERY_TAG forge_app:<function>:<visitor>`.
+- **The cold-load freeze is fixed:** Explore's and Same's queries run in parallel.
+- **Ask:**
+  - earlier answers fold into rows; the input is readable in dark mode
+  - an in-conversation "Thinking" card
+  - line breaks kept in questions; the router splits on line breaks and `?"`
+  - every chartable table gets a chart; charts redesigned (Explore-style bars, period columns)
+- **C17 part B:** `data_gen/40_sp_append_day.sql` + 99_run Step 3 + tests; in the handoff lock.
+- `pytest -q` 739 passed; `pytest -m ui` 30/30 (one known layout flake under load).
+
+### Blocked / Open
+- CoCo:
+  - run C17b (clone → production → task)
+  - the guardrails artifact for the "can't be answered" message
+  - label the parts of multi-part agent answers
+- User: push; set `PUBLIC_APP_URL`; vault or delete `~/forge-keys`.
+
+### Next action (exact)
+- Docs (execution-notes header, README p95 + roadmap items), then C05, then judge-style testing.
 
 ---
 

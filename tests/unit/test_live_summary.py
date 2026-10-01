@@ -47,7 +47,7 @@ def test_a_failed_teardown_counts_as_the_test_failing():
 def test_every_live_test_file_maps_to_a_section():
     live_files = [p for p in (ROOT / "tests").rglob("test_*.py")
                   if not {"unit", "ui", "artifacts", "scale"} & set(p.parts)
-                  and re.search(r"mark\.live|def test_\w+\(forge", p.read_text(encoding="utf-8"))]
+                  and re.search(r"mark\.live|def test_\w+\(forge\b", p.read_text(encoding="utf-8"))]
     assert live_files
     for path in live_files:
         rel = path.relative_to(ROOT).as_posix()

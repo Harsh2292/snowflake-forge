@@ -9,6 +9,8 @@ by itself wherever Snowflake is reachable.
 Screens other than Ask are self-contained HTML views (ui/views/), fed by ui/payloads.py.
 """
 
+import uuid
+
 import streamlit as st
 
 from utils import forge_data
@@ -19,6 +21,8 @@ from ui.screens import ask
 st.set_page_config(page_title="Supply Chain Forge", page_icon=":material/hub:", layout="wide",
                    initial_sidebar_state="collapsed")
 forge_data.configure(settings.connection(), settings.app_settings())
+st.session_state.setdefault("visitor", uuid.uuid4().hex[:8])  # anonymous; labels this visitor's queries
+forge_data.set_visitor(st.session_state.visitor)
 
 STEPS = [("problem", "The problem"), ("fix", "The fix"), ("same", "Same for everyone"), ("ask", "Ask")]
 TOOLS = [("explore", "Explore metrics", ":material/bar_chart:"), ("health", "Data health", ":material/monitor_heart:")]
@@ -59,7 +63,7 @@ step = st.session_state.step
 data = None
 if step != "ask":
     name, build, height, next_step = VIEWS[step]
-    data = build(forge_data.data_mode())
+    data = build(payloads.data_version())  # cached per data version (the as-of date)
 notices = forge_data.pop_notices()
 if notices and step != "ask":
     build.clear()  # never keep saved results in the cache: the next visit retries Snowflake

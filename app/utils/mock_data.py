@@ -235,7 +235,7 @@ MOCK_AS_OF = (CAPTURED.get("quality", {}).get("data_health_all") or {}).get("as_
 CANNED_QUESTIONS = {
     config.CANONICAL_QUESTIONS[0]: ("on_time_delivery_rate", None),
     config.CANONICAL_QUESTIONS[1]: ("on_time_delivery_rate", "plants.plant_region"),
-    config.CANONICAL_QUESTIONS[2]: ("on_time_delivery_rate", "orders.order_quarter"),
+    config.CANONICAL_QUESTIONS[2]: ("on_time_delivery_rate", "orders.order_year_quarter"),  # as the verified query
     config.CANONICAL_QUESTIONS[3]: ("fill_rate", None),
     config.CANONICAL_QUESTIONS[4]: ("fill_rate", "parts.category"),
     config.CANONICAL_QUESTIONS[5]: ("days_of_inventory", "plants.plant_name"),

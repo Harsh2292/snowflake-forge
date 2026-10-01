@@ -352,3 +352,10 @@ def test_driver_warms_up_then_sets_the_steady_schedule():
     assert ("SUPPLY_CHAIN_FORGE.OPS.SP_DQ_SELF_CHECKS", "'SUPPLY_CHAIN_FORGE'") in calls
     assert ("SUPPLY_CHAIN_FORGE.OPS.SP_ATTACH_DMFS", "'SUPPLY_CHAIN_FORGE', 'TRIGGER_ON_CHANGES'") in calls
     assert (config.DATA_HEALTH_PROC, "'ALL'") in calls
+
+
+def test_an_entity_without_checks_is_unknown_not_ok():
+    """Review #11 (1 Oct): missing check configuration must not read as healthy."""
+    sql = (ROOT / "quality" / "30_sp_data_health.sql").read_text(encoding="utf-8")
+    assert "IFF(c.ENTITY IS NULL, 1, c.CHECK_SEV) AS CHECK_SEV" in sql
+    assert "COALESCE(c.CHECK_SEV, 0)" not in sql

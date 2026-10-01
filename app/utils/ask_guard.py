@@ -134,27 +134,29 @@ class AnswerCache:
         self._clock = clock
         self._max = max_entries
         self._lock = threading.Lock()
-        self._items = {}  # key -> (expires_at, result)
+        self._items = {}  # key -> (expires_at, result, data version)
 
-    def get(self, question: str):
+    def get(self, question: str, version=None):
+        """The cached answer, if it's for the same data version (the as-of date: review #5)."""
         key = normalise(question)
         with self._lock:
             hit = self._items.get(key)
             if hit is None:
                 return None
-            if hit[0] <= self._clock():
+            if hit[0] <= self._clock() or hit[2] != version:
                 del self._items[key]
                 return None
             return hit[1]
 
-    def put(self, question: str, result: dict) -> None:
-        """Only live answers are kept: a fallback answer must never be served as live, and a
-        "paused" one must not outlast the pause."""
-        if result.get("source") != "live" or result.get("status") == "paused":
+    def put(self, question: str, result: dict, version=None) -> None:
+        """Only complete live answers are kept: a fallback answer must never be served as
+        live, a "paused" one must not outlast the pause, and an interrupted or stopped one
+        is not an answer (review #13)."""
+        if result.get("source") != "live" or result.get("status", "completed") != "completed":
             return
         key = normalise(question)
         ttl = config.ANSWER_CACHE_SECONDS["canonical" if key in _CANONICAL else "free_text"]
         with self._lock:
             if len(self._items) >= self._max:
                 self._items.pop(min(self._items, key=lambda k: self._items[k][0]))
-            self._items[key] = (self._clock() + ttl, result)
+            self._items[key] = (self._clock() + ttl, result, version)

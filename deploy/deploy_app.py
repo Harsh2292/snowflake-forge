@@ -36,9 +36,11 @@ REQUIRED = {MAIN_FILE, "environment.yml"}  # SiS warehouse runtime reads environ
 EXTRA_FILES = {Path("environment.yml"): ROOT / "deploy" / "sis" / "environment.yml"}
 
 # Local-only: pip dependencies (SiS uses environment.yml), bytecode, secrets and keys.
-SKIP_NAMES = {"requirements.txt", "secrets.toml"}
-SKIP_DIRS = {"__pycache__"}
-SKIP_SUFFIXES = {".pyc", ".p8", ".pem", ".key"}
+# Matched case-insensitively (review #18, 1 Oct: ".PEM" or ".Env" slipped through before).
+SKIP_NAMES = {"requirements.txt", "secrets.toml", ".env", "credentials.json", "connections.toml"}
+SKIP_DIRS = {"__pycache__", ".git"}
+SKIP_SUFFIXES = {".pyc", ".p8", ".pem", ".key", ".p12", ".pfx", ".crt", ".env"}
+SKIP_PREFIXES = ("rsa_key", ".env")
 
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 
@@ -48,8 +50,9 @@ def app_files(app_dir: Path = APP_DIR) -> list[Path]:
     files = []
     for path in sorted(app_dir.rglob("*")):
         rel = path.relative_to(app_dir)
-        if (path.is_file() and not SKIP_DIRS & set(rel.parts)
-                and path.name not in SKIP_NAMES and path.suffix not in SKIP_SUFFIXES):
+        name, suffix = path.name.lower(), path.suffix.lower()
+        if (path.is_file() and not SKIP_DIRS & {part.lower() for part in rel.parts}
+                and name not in SKIP_NAMES and suffix not in SKIP_SUFFIXES and not name.startswith(SKIP_PREFIXES)):
             files.append(rel)
     return files + [rel for rel, source in EXTRA_FILES.items() if source.is_file()]
 

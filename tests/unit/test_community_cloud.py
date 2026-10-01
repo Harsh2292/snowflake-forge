@@ -97,6 +97,40 @@ def test_an_unreadable_key_never_echoes_the_key(section):
     assert err.value.__cause__ is None and err.value.__suppress_context__
 
 
+@pytest.mark.parametrize("damage", [
+    lambda pem: "\n".join("    " + line for line in pem.splitlines()),       # indented by the editor
+    lambda pem: pem.replace("\n", "\\n"),                                     # a one-line value with \n
+    lambda pem: " ".join(pem.split()),                                        # all on one line
+    lambda pem: "\n\n" + pem.replace("\n", "\r\n") + "\n\n",                  # Windows line ends, blank lines
+    lambda pem: "\n".join(pem.strip().splitlines()[1:-1]),                    # the body without BEGIN / END
+])
+def test_a_key_damaged_by_pasting_still_works(section, key, damage):
+    """Community Cloud, 1 Oct: the pasted key failed as "not a readable PEM private key"."""
+    section["private_key"] = damage(_pem(key))
+    assert forge_data.session_params(section)["private_key"] == _der(key)
+
+
+def test_a_public_key_by_mistake_is_named(section, key):
+    public = key.public_key().public_bytes(serialization.Encoding.PEM,
+                                           serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+    section["private_key"] = public
+    with pytest.raises(ValueError, match="PUBLIC key: paste rsa_key.p8"):
+        forge_data.session_params(section)
+
+
+def test_an_encrypted_key_without_its_passphrase_is_named(section, key):
+    section["private_key"] = _pem(key, "s3cret")
+    with pytest.raises(ValueError, match="encrypted: add private_key_passphrase"):
+        forge_data.session_params(section)
+
+
+def test_a_missing_pem_block_is_named(section):
+    section["private_key"] = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC"
+    with pytest.raises(ValueError, match="no '-----BEGIN PRIVATE KEY-----'") as err:
+        forge_data.session_params(section)
+    assert "MIIE" not in str(err.value)
+
+
 # ── Live by default ──────────────────────────────────────────────────────────
 
 def test_a_secrets_connection_switches_live_on(section):

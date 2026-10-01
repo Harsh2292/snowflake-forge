@@ -19,6 +19,7 @@ NOT_QUERIES = {"pop_notices", "data_mode", "get_session", "validate", "default_w
                "configure", "session_params",  # C15: connection setup, no SQL
                "agent_request",  # C6c: builds the bound JSON, sends nothing
                "add_notices", "agent_unavailable",  # C14: notice hand-off, error check
+               "pem_text",  # C15 fix: cleans a pasted private key, no SQL
                "get_source_schema_summary"}  # static catalog in both modes (C02)
 
 

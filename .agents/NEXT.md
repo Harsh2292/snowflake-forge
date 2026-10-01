@@ -220,9 +220,11 @@ of the fallback banner. ✅ Built in C14 (30 Sep).
 - **`pytest -m live`: 148 passed, 0 failed** in the new account (1 Oct ~05:20 UTC, the first live
   run ever; `B08m_run.md` §4). It needs the bash tool's **`dangerously_disable_sandbox`** (the
   sandbox blocks the browser-OAuth redirect) and the user approving the sign-in within ~2 min.
-- **B15a Snowflake side DONE (1 Oct):** `FORGE_APP_SVC` has the user's public key
-  (fingerprint `SHA256:iiLw9woP…Fyv0=`, matches the private key); **the live suite as
-  `FORGE_APP_SVC` / `FORGE_APP_ROLE` (key pair, no browser): 148 passed, 0 failed.** Left for
+- **B15a Snowflake side DONE (1 Oct):** `FORGE_APP_SVC` has the user's public key. **Rotated
+  later on 1 Oct** (the user's request, after an error): current fingerprint
+  `SHA256:Nx0ooxGknzroeai7oD3hn9KDeA9q6AENfyiFXlOxFlY=`, private key
+  `C:\Users\Lazy Boy\forge-keys\rsa_key.p8` (outside the repo). The old key is rejected.
+  **The live suite as `FORGE_APP_SVC` / `FORGE_APP_ROLE` (key pair, no browser): 148 passed, 0 failed.** Left for
   B15a: the user creates the Community Cloud app with the secrets below, then the RUNBOOK §4
   checks on the public link.
 
@@ -233,7 +235,9 @@ be the active one, and pass `connection='QURFOQP-XU04029'` on every SQL call any
    Cloud app exists, the RUNBOOK §4 checks on the public link (Ask included).
 3. **B12a part 2:** Claude Code's C17 day-append when it's in the lock (**critical path**: the
    daily tables read WARN from 1 Oct ~17:00 UTC), then the nightly task with the UTC date.
-4. **B14:** `pytest -m live` as FORGE_ADMIN + security review → art 11.
+4. **B14:** hardening ✅ 1 Oct (Guardrails, app auth policy, ops views, hourly e-mail alert:
+   `sql/06_ops/`, card `B14_security_ops.md`) and live audit ✅ 148/148. Left: the security
+   review write-up → art 11.
 5. **B13** (optional, scale proof) on a clone in the new account, if the budget allows.
 6. **B15:** cost check + final checks on the public link.
 
@@ -418,8 +422,8 @@ No-collision rules (one owner per file; the handoff lock; interfaces fixed first
 | B12a | Freshness fixes: reference data + nightly day-append (Day 3) | 🔄 **Part 1 ✅ 30 Sep** (C16: 93/93, ALL OK, art 10 re-captured). Part 2 (C17 + nightly task) in the new account, when C17 is in the lock (critical: WARN from 1 Oct ~17:00 UTC) |
 | B08m | Move to the event account (cutover now, user decision 30 Sep) | ✅ 30 Sep evening: replayed with no hand fix, data byte-identical, numbers match, 93/93, eval 28/30. **All work continues in `QURFOQP-XU04029`** (`runs/B08m_run.md`) |
 | B13 | Run C12 scale harness on a clone → art 12 (Day 3, old account) | ⬜ C12 READY; clone tests must re-create the clone's DTs (they read the original database) |
-| B14 | Run C13 live tests + security review → art 11 (2 Oct, new account) | ⬜ C13 READY (`pytest -m live`, 148 checks) |
-| B15a | Public live link trial on Streamlit Community Cloud (Day 2, old account; ADR-009) | 🔄 30 Sep: Snowflake side done (`sql/05_app_access/` 01 + 02: `FORGE_APP_ROLE`, `FORGE_APP_SVC`, 5-credit/day monitor, 25-credit Cortex budget with auto-stop of Ask). Waits for the user's public key + Community Cloud app. C6c is done, so the Ask check can run too |
+| B14 | Run C13 live tests + security review → art 11 (2 Oct, new account) | 🔄 1 Oct: live audit 148/148 (admin + app user); Guardrails, app auth policy, ops views, hourly alert (`sql/06_ops/`). Left: art 11 write-up |
+| B15a | Public live link trial on Streamlit Community Cloud (Day 2, old account; ADR-009) | 🔄 1 Oct: key set on `FORGE_APP_SVC` (fingerprint matches), live suite as the app user 148/148. Left: the user's Community Cloud app → RUNBOOK §4 on the public link |
 | B15 | Cost controls + deploy (2 Oct, new account): the Community Cloud link is the submitted one | ⬜ |
 | — | Stretch: governed splitter for the router, lineage trace | ⬜ only if time is left |
 

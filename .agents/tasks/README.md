@@ -38,7 +38,7 @@ own gate.
 Cards are authored a step or two ahead of execution, so each one can incorporate what was
 actually learned from the previous gate rather than guessing.
 
-Written: `B01`, `B02`, `B03`, `B04`, `B05`, `B06`, `B07`, `B07b`, `B08`, `B08b`, `B08c`, `B09`, `B10`, `B12`, `B15a`, `B09a` (reduced), `B08m`, `C01`, `C02`, `C03`, `C04`, `C07`, `C06a`, `C05`, `C09`, `C08`, `C10`, `C11`, `C12`, `C15`, `C06b`, `C06c`, `C16`, `C17`, `C13`, `C14`, `C14b`
+Written: `B01`, `B02`, `B03`, `B04`, `B05`, `B06`, `B07`, `B07b`, `B08`, `B08b`, `B08c`, `B09`, `B10`, `B12`, `B15a`, `B09a` (reduced), `B08m`, `B14`, `C01`, `C02`, `C03`, `C04`, `C07`, `C06a`, `C05`, `C09`, `C08`, `C10`, `C11`, `C12`, `C15`, `C06b`, `C06c`, `C16`, `C17`, `C13`, `C14`, `C14b`
 (Claude Code writes each of its cards at planning time, before executing it.)
 Specified in `.agents/tasks/COCO_TASKS.md` and `CLAUDE_TASKS.md` (the full queues), with
 exact specs in `docs/LLD.md` and `docs/GAPS_RESOLVED.md`.

@@ -12,6 +12,7 @@ label what it shows. This module never imports Streamlit, so it can be tested al
 import json
 import logging
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -132,14 +133,46 @@ def session_params(section) -> dict:
     return params
 
 
+_PEM_BLOCK = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
+
+
+def pem_text(text: str) -> str:
+    """The key as clean PEM, repairing what a paste into a secrets box does to it: indented
+    lines, literal "\\n" in a one-line value, the whole key on one line. Errors say what's
+    wrong in words and never contain key material."""
+    text = str(text or "").replace("\\n", "\n")
+    block = _PEM_BLOCK.search(text)
+    bare = re.sub(r"\s+", "", text)
+    if not block and len(bare) > 100 and re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", bare):
+        # the body pasted without its BEGIN / END lines (1 Oct): wrap it
+        text = f"-----BEGIN PRIVATE KEY-----\n{bare}\n-----END PRIVATE KEY-----"
+        block = _PEM_BLOCK.search(text)
+    if not block:
+        raise ValueError("private_key in the Snowflake secrets has no '-----BEGIN PRIVATE KEY-----' "
+                         "… '-----END PRIVATE KEY-----' block: paste the whole of rsa_key.p8")
+    kind, body = block.group(1).strip(), re.sub(r"\s+", "", block.group(2))
+    if "PUBLIC" in kind:
+        raise ValueError("private_key in the Snowflake secrets is a PUBLIC key: paste rsa_key.p8 "
+                         "(the private key), not rsa_key.pub")
+    if "PRIVATE" not in kind:
+        raise ValueError(f"private_key in the Snowflake secrets is a {kind} block, not a private key")
+    lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+    return "\n".join([f"-----BEGIN {kind}-----", *lines, f"-----END {kind}-----", ""])
+
+
 def _der_private_key(text: str, passphrase=None) -> bytes:
     from cryptography.hazmat.primitives import serialization
     password = passphrase.encode() if isinstance(passphrase, str) and passphrase else None
+    pem = pem_text(text)
+    if "ENCRYPTED" in pem.splitlines()[0] and password is None:
+        raise ValueError("private_key in the Snowflake secrets is encrypted: add private_key_passphrase, "
+                         "or make the key with -nocrypt (deploy/RUNBOOK.md §1)")
     try:
-        key = serialization.load_pem_private_key(str(text).strip().encode(), password=password)
+        key = serialization.load_pem_private_key(pem.encode(), password=password)
     except Exception:
         # from None: never chain an exception that could carry key material into a log
-        raise ValueError("private_key in the Snowflake secrets is not a readable PEM private key") from None
+        raise ValueError("private_key in the Snowflake secrets is not a readable PEM private key "
+                         "(its text was damaged, or it's incomplete)") from None
     return key.private_bytes(encoding=serialization.Encoding.DER,
                              format=serialization.PrivateFormat.PKCS8,
                              encryption_algorithm=serialization.NoEncryption())

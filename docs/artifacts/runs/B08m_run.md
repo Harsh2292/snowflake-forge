@@ -104,6 +104,12 @@ deprecation notice. **The first live run of the suite ever.**
   `RSA_PUBLIC_KEY_FP = SHA256:iiLw9woPFOJe6lO+YZOeHaMmfXqkZg0PM2iBq7WFyv0=`; the fingerprint
   computed from the user's private key file is identical. The private key is unencrypted and
   lives outside the repo (`.gitignore` also blocks `rsa_key*`).
+- **Key rotated later on 1 Oct** (the user generated a new pair after an error):
+  `ALTER USER FORGE_APP_SVC SET RSA_PUBLIC_KEY` (new key) → `RSA_PUBLIC_KEY_FP =
+  SHA256:Nx0ooxGknzroeai7oD3hn9KDeA9q6AENfyiFXlOxFlY=`, `RSA_PUBLIC_KEY_2` empty. It matches
+  the new private key file. Checked: the new key logs in as `FORGE_APP_SVC` / `FORGE_APP_ROLE`
+  and reads the governed OTD (0.875323); **the old key is rejected** (`390144: JWT token is
+  invalid`).
 
 ## Left in the new account (next session)
 

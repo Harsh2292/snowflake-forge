@@ -178,8 +178,11 @@ B15a (key + public link), B12a part 2 (C17 + the nightly task), B14, B15. Always
   date-driven (the nightly day-append).
 - **Clones:** a cloned dynamic table keeps reading the ORIGINAL database (the definitions name
   it in full): re-create the DTs in any clone test.
-- **`CREATE OR REPLACE AGENT` drops its grants:** re-apply them, incl. the `FORGE_APP_ROLE`
-  grant in `sql/05_app_access/01_app_service_user.sql`.
+- **`CREATE OR REPLACE` drops grants made by OTHER scripts** (found at B08m: re-creating
+  `SP_DATA_HEALTH` for C16 silently removed the public app's USAGE on it in the old account).
+  After re-creating ANY object the app uses (the semantic view keeps grants via `COPY GRANTS`;
+  procedures and the agent don't), **re-run `sql/05_app_access/01_app_service_user.sql`**. It's
+  idempotent and doesn't touch `FORGE_APP_SVC`'s key.
 - **Agent tools run as the CALLING role** (observed at B10), not the user's default role.
 - **Semantic view clause order is enforced**: `TABLES` → `RELATIONSHIPS` → `FACTS` →
   `DIMENSIONS` → `METRICS`. Build incrementally (2 tables first), never all 9 blind.

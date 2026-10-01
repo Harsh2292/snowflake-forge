@@ -202,13 +202,23 @@ of the fallback banner. ✅ Built in C14 (30 Sep).
   ("After the gate" = what's left).
 - The old account (`tyduokn-gf25237`) is **no longer used** (the user's decision). Its semantic
   view still has the removed 15th verified query; leave it.
+- **Extra verification done the same night** (`B08m_run.md`, "Extra verification"): 122 objects
+  and all grants identical (new account the correct side of 2 old-account drifts); **the public
+  app's 71 queries + one agent call all work as `FORGE_APP_ROLE`**, same numbers as FORGE_ADMIN.
+- **`pytest -m live`: 148 passed, 0 failed** in the new account (1 Oct ~05:20 UTC, the first live
+  run ever; `B08m_run.md` §4). It needs the bash tool's **`dangerously_disable_sandbox`** (the
+  sandbox blocks the browser-OAuth redirect) and the user approving the sign-in within ~2 min.
+- **B15a Snowflake side DONE (1 Oct):** `FORGE_APP_SVC` has the user's public key
+  (fingerprint `SHA256:iiLw9woP…Fyv0=`, matches the private key); **the live suite as
+  `FORGE_APP_SVC` / `FORGE_APP_ROLE` (key pair, no browser): 148 passed, 0 failed.** Left for
+  B15a: the user creates the Community Cloud app with the secrets below, then the RUNBOOK §4
+  checks on the public link.
 
 **Order for the next session** (all in the new account `QURFOQP-XU04029`; its connection should
 be the active one, and pass `connection='QURFOQP-XU04029'` on every SQL call anyway):
 1. Tell the user the Community Cloud secrets values (B08m card, "After the gate").
-2. **B15a:** the user's public key → `ALTER USER FORGE_APP_SVC SET RSA_PUBLIC_KEY`, check
-   `RSA_PUBLIC_KEY_FP`; then RUNBOOK §4 checks (Ask included) and `pytest -m live` as
-   FORGE_APP_ROLE.
+2. **B15a:** key ✅ and live suite as the app role ✅ (1 Oct). Left: once the user's Community
+   Cloud app exists, the RUNBOOK §4 checks on the public link (Ask included).
 3. **B12a part 2:** Claude Code's C17 day-append when it's in the lock (**critical path**: the
    daily tables read WARN from 1 Oct ~17:00 UTC), then the nightly task with the UTC date.
 4. **B14:** `pytest -m live` as FORGE_ADMIN + security review → art 11.
@@ -218,8 +228,8 @@ be the active one, and pass `connection='QURFOQP-XU04029'` on every SQL call any
 Close out each card: NEXT.md, HANDOFF (CoCo section only), SESSION_LOG, COCO_TASKS,
 `.agents/tasks/README.md`, and `docs/artifacts/runs/<card>_run.md` for each Claude Code file run.
 
-**Open for the user:** the public key for `FORGE_APP_SVC`; the Community Cloud app (secrets →
-the new account).
+**Open for the user:** the Community Cloud app, with its secrets pointing at the new account
+(the key is set: 1 Oct).
 
 ---
 

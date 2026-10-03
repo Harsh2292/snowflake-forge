@@ -61,6 +61,30 @@
 
 ---
 
+## Session 43 — 2026-10-02 — Claude Code (code freeze)
+
+### Done
+- **Agent answers lost their data.**
+  - The card drew rows only as a chart, from the first two columns.
+  - Fix: smarter label and measure columns, plus a table for rows that can't be charted
+    (`tests/unit/test_answer_tables.py`). Card heights were measured in a browser.
+- **Agent instructions rewritten** (`agent/01_agent.sql`):
+  - every row is listed; no one-sentence rule
+  - one Analyst call per question, and the period default isn't asked about
+  - refusals for writes, role switches and prompt leaks; no invented periods
+  - the file re-grants `FORGE_APP_ROLE`
+- **README:** a live-app link at the top.
+- **Tests:** `pytest -q` 809 passed; `-m ui` 30/30.
+
+### Blocked / Open
+- **The user:** run all of `agent/01_agent.sql` in Snowsight. A Snowsight form save broke the
+  data tool. Then push and test the public link.
+
+### Next action (exact)
+- **CODE FREEZE.** Next session: the demo script, the presentation and documentation edits only.
+
+---
+
 ## Session 42 — 2026-10-01 (evening) — Claude Code
 
 **Milestone**: M5 (production pass after the outside review)

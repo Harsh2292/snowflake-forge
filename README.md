@@ -30,7 +30,7 @@ Supply chain data lives in four systems that don't agree with each other:
 Each system names and dates things its own way. When leadership asks *"What is our on-time
 delivery rate?"*, Planning answers **68.2%**, because it counts deliveries against the ERP
 order's date. Logistics answers **87.5%**, because it counts against the carrier's promised
-date. It's the same shipments, 19.4 points apart, and nobody trusts either number.
+date. It's the same shipments, 19.3 points apart, and nobody trusts either number.
 
 ## The fix
 
@@ -49,8 +49,7 @@ A **governed semantic layer** defines each business term once, in code. Every co
   <img src="assets/screenshots/5-data-health.png" width="49%" alt="Data health: automated data-quality checks and freshness">
 </p>
 
-<sub>The screenshots come from the browser test suite. They show the last captured Snowflake
-results, so the header reads "Mock data"; live, it reads "Live".</sub>
+<sub>Screenshots of the live app, taken on 3 Oct 2026 in the light theme.</sub>
 
 ---
 
@@ -440,7 +439,8 @@ handoff lock), and `tasks/` (one card per track, with its gate).
 | [`docs/DATA_SPEC.md`](docs/DATA_SPEC.md) | Source DDL, volumes, realism, the mess catalogue, cleansing and time rules |
 | [`docs/artifacts/`](docs/artifacts/) | Real Snowflake output and run reports for every build step |
 | [`deploy/RUNBOOK.md`](deploy/RUNBOOK.md) | Public link setup, checks, cutover, judging-day checklist |
-| [`demo/demo_script.md`](demo/demo_script.md) | The demo walkthrough |
+| [`demo/demo_script.md`](demo/demo_script.md) | The demo video script: scenes, CoCo CLI prompts, voice-over |
+| [`demo/submission/`](demo/submission/) | The submission deck (PPTX and PDF) and the prototype brief |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | What comes after the hackathon |
 | [`docs/references/`](docs/references/) | Snowflake and Streamlit API notes used while building |
 

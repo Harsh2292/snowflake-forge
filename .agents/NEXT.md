@@ -17,6 +17,29 @@
 
 ---
 
+## 📦 Submission pack (2026-10-03, Claude Code): ready
+
+- **Deck:** `demo/submission/Supply_Chain_Forge_Prototype_Deck.pptx` and `.pdf` (0.65 MB, 7 slides,
+  on the hackathon template). Rebuilt by `demo/submission/build_deck.py`.
+- **Brief:** `demo/submission/BRIEF.md` (866 of 1,024 characters).
+- **Video script:** `demo/demo_script.md` (scenes, 3 CoCo CLI prompts, voice-over, editing steps).
+- **README:** the 4 screenshots re-taken from the live link (all light theme, tag "Live").
+- **User:** check the title slide (Team Leader "Harsh", Team Name "Supply Chain Forge"); record
+  the video; upload it; submit the form.
+
+## 🧊 CODE FREEZE (2026-10-02, the user's decision): development is over
+
+No new features and no code changes. **Next session (Claude Code): the demo script, the
+presentation and documentation edits only.**
+
+Still open from 2 Oct (the user):
+- Run all of `agent/01_agent.sql` in Snowsight as `FORGE_ADMIN` (5 statements). Saving from
+  the Snowsight agent form broke the data tool ("I don't have access to the supply chain
+  analyst tool"). The file restores the tools, the new instructions and the grants. Don't
+  edit the agent in the form again.
+- Push; set `PUBLIC_APP_URL`. Then ask "List the top 5 suppliers in EMEA with the shortest
+  lead times" on the public link: you should see 5 listed suppliers and a chart.
+
 ## 🔧 2 Oct fix: agent answers lost their data (the user's screenshots)
 
 "Top 5 EMEA suppliers by lead time" showed one sentence ("led by…") and no rows.
@@ -26,9 +49,13 @@
 - **Fixed in the app:** the chart picks a name column and a measure column. Rows that can't be
   charted show as a table (10 rows, "N of M shown"). Tests are in
   `tests/unit/test_answer_tables.py`; `pytest -q` 809, `-m ui` 30/30. Ships on push.
-- **Fixed in `agent/01_agent.sql`:** list every row asked for ("- name: value", top 10), never
-  "led by". The file now also re-grants `FORGE_APP_ROLE`. **It isn't live until it's run in
-  Snowflake** (Snowsight, as `FORGE_ADMIN`, the whole file).
+- **Fixed in `agent/01_agent.sql`, both instruction blocks rewritten:**
+  - every row is listed ("- name: value", top 10); no "one sentence" rule, never "led by"
+  - one Analyst call per question, and the period default isn't asked about
+  - refusal rules for writes, role switches and prompt leaks; no invented periods
+  - the file re-grants `FORGE_APP_ROLE`
+  - **It isn't live until the whole file is run in Snowflake.**
+- Table card heights were measured in Chromium. The A01 leak guard follows the new wording.
 
 ## ⏹ CLOSED (2026-10-01, the user's decision): the build is finished
 

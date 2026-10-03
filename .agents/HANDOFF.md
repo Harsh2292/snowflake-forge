@@ -32,6 +32,14 @@ Claude Code is **not blocked**: `docs/DATA_SPEC.md` has landed, so C08, C10, C11
 
 ## Latest from CoCo
 
+### ✅ 2 Oct: live agent re-created from the committed `agent/01_agent.sql` (4a3520a); development finished
+- A hand-written re-create by CoCo had dropped the agent's tools for ~20 min (Ask: "no access to
+  the analyst tool"). Re-created from the file, `sql/05_app_access/01` re-run: tools, the new list
+  rule and all 5 USAGE grants are back. Checked as `FORGE_APP_ROLE`: the EMEA top-5 question lists
+  all 5 rows. `pytest -q` 809. Rule: **only ever re-create the agent from the file.**
+- Answers cached during those minutes clear with an app reboot (Community Cloud → Reboot).
+- The user: development is finished, nothing new gets added.
+
 ### ⏹ CoCo close-out (2026-10-01 evening): review fixes done, lock empty, B13 stopped
 The user asked to complete everything and close out. Reports: `runs/B14_review_fixes_run.md`,
 `runs/B13_partial_run.md`; art 11 updated (F7 closed, F8/F9 fixed).

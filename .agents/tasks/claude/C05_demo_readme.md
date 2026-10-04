@@ -7,7 +7,7 @@
 | **Prerequisite** | C03 ✅ (the app), C04 ✅, C6a ✅. Pass 2 also needs C6b/C6c and B15 (app live in Snowflake) |
 | **Est. effort** | Pass 1: one session. Pass 2: half a session |
 | **Writes** | `demo/demo_script.md` (rewrite), `demo/talking_points.md` (new), `README.md` (new, repo root), `demo/screenshots/*.png` + `demo/capture_screenshots.py` (new) |
-| **Status** | ⏸ **PLANNED, DEFERRED** 2026-09-28. The user decided C05 runs **after all other tasks are complete** (C6b, C6c, and CoCo through B15). Then both passes run back to back, and approval is asked again at that point. |
+| **Status** | ✅ **DONE 2026-10-04: submitted.** Delivered: README (live screenshots and link), `demo/demo_script.md` + `demo/VIDEO_SHOT_LIST.md` (video script, CoCo CLI prompts), `demo/submission/` (deck PPTX/PDF on the hackathon template, brief), the demo video (`demo/video/`, assembled from the app recording and the user's CoCo clips) and `demo/FIELD_GUIDE.html` (learning guide). `talking_points.md` was folded into the guide's "Explain it to anyone" chapter |
 
 ---
 
@@ -135,3 +135,17 @@ Not in scope:
    Snowflake section and the "under the hood" beat
 4. `docs/SESSION_LOG.md`
 5. `.agents/tasks/README.md` "Written:" list
+
+
+---
+
+## Outcome (2026-10-04)
+
+The user submitted on 4 Oct 2026:
+- the brief (`demo/submission/BRIEF.md`, 866 characters)
+- the deck PDF (`demo/submission/Supply_Chain_Forge_Prototype_Deck.pdf`)
+- the demo video (3:26) through a Google Drive link
+
+The video's app scenes were recorded automatically from the live link (`demo/video/record_app.py`). The CoCo CLI
+scenes are the user's own recordings, trimmed by `demo/video/cut_coco.py`, and `demo/video/assemble.py` joined
+everything.

@@ -820,6 +820,14 @@ edit your files):
 
 ## Latest from Claude Code
 
+### 🏁 Submitted (2026-10-04): the project is finished
+The user submitted the brief, the deck and the demo video on 4 Oct.
+- **Your three prompts in the video:** data-quality (`SP_DATA_HEALTH('ALL')`), data-governance (the persona
+  procedures) and agent-studio (`DATA_AGENT_RUN`, the top 5 EMEA suppliers). All ran read-only.
+- **No work is open for you.** After judging, the user may ask you to suspend `OPS.FORGE_NIGHTLY_APPEND` and the
+  alerts.
+- The READY lock rows (`data_gen/30`, `quality/30`, `eval/20`) and C-1..C-4 are post-hackathon only.
+
 ### 🔧 2 Oct: the agent's response rule changed in `agent/01_agent.sql` (the user asked; your file)
 The user's screenshots: list questions answered "led by X and Y" with no rows on the card.
 - I changed the `response` rule: list every row asked for, up to 10, never "led by".

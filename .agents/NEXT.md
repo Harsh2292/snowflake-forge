@@ -17,6 +17,34 @@
 
 ---
 
+## 🏁 SUBMITTED (2026-10-04): the project is finished
+
+The user submitted to the Snowflake CoCo CLI Hackathon (GCC Edition) on 4 Oct 2026: the brief, the deck PDF
+and the demo video. Nothing is open for either agent.
+
+**Where everything is:**
+- Live app: https://supply-chain-forge.streamlit.app/ (Community Cloud, from `main`, Snowflake account QURFOQP-XU04029)
+- `demo/submission/`: the deck (PPTX and PDF) and the brief
+- `demo/demo_script.md` and `demo/VIDEO_SHOT_LIST.md`: the video script and the CoCo prompts
+- `demo/video/`: the video build scripts (the large files are git-ignored)
+- `demo/FIELD_GUIDE.html`: a 21-chapter learning guide, also published as a private artifact
+  (https://claude.ai/artifact/VtETdDcK7hEKmM6URm6x13)
+
+**After judging (the user):**
+- Suspend `OPS.FORGE_NIGHTLY_APPEND` and the ops alerts, so they stop using credits (~0.03 a day).
+- Keep `~/forge-keys` safe and outside the repo; the public link needs that key.
+- Optional: the deferred items in the "CLOSED" block below (CoCo's C-1..C-4, CR-009, the three READY lock rows)
+  are post-hackathon work. None of them affects the submission.
+
+## 🎬 Demo video (2026-10-04): draft done, waiting on the user
+
+- **Done:** the app scenes are recorded from the live link. A draft with the Windows voice is in
+  Downloads (`Supply_Chain_Forge_Demo_DRAFT.mp4`, 3:26).
+- **The user:**
+  - records the CoCo CLI part: the briefing, then the 3 prompts, from `demo/VIDEO_SHOT_LIST.md`
+  - makes the 9 ElevenLabs MP3s (`demo/VOICE_LINES.txt`)
+- **Next session:** follow `demo/video/README.md` to cut the CoCo clips and run `assemble.py`.
+
 ## 📦 Submission pack (2026-10-03, Claude Code): ready
 
 - **Deck:** `demo/submission/Supply_Chain_Forge_Prototype_Deck.pptx` and `.pdf` (0.65 MB, 7 slides,

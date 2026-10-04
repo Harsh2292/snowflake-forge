@@ -1,0 +1,18 @@
+{
+ "s1_start": 30.08,
+ "s1_end": 52.33,
+ "s2_start": 52.33,
+ "s2_end": 74.84,
+ "s4a_start": 74.84,
+ "s4a_end": 91.41,
+ "s4b_start": 91.41,
+ "s4b_instant_done": 101.78,
+ "s4b_asked": 107.2,
+ "s4b_thinking": 111.2,
+ "s4b_answered": 150.73,
+ "s4b_end": 161.0,
+ "s5_start": 161.0,
+ "s5_end": 181.88,
+ "s6_start": 181.88,
+ "s6_end": 194.94
+}

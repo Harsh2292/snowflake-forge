@@ -1,0 +1,9 @@
+raw.webm
+audio_draft/
+audio/
+seg/
+card_*.png
+*.mp4
+*.wav
+*.mp3
+coco_*.mp4

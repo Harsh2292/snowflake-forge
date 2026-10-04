@@ -1,5 +1,40 @@
 # Video shot list: what to record, and what the voice says
 
+## Step 0: brief CoCo first (don't record this)
+
+Paste this into CoCo CLI before recording. It explains the plan, checks every object, and runs
+each step once, so the recorded run is quick and clean. Wait until CoCo answers READY.
+
+```
+Context: I'm recording a 4-minute demo video of Supply Chain Forge for the Snowflake CoCo CLI
+Hackathon. In the recording I will paste three prompts, one at a time. Each one asks you to use
+one skill and run one read-only step in Snowflake. Before we record, please prepare.
+
+Rules for this session (now and during the recording):
+1. Read-only. Do not create, alter, drop, grant or insert anything, and do not edit any file.
+2. Always use connection QURFOQP-XU04029, role FORGE_ADMIN, warehouse FORGE_WH, database
+   SUPPLY_CHAIN_FORGE.
+3. Keep every answer short and readable on screen: start with one line naming the skill you are
+   using, then the result as a small table, then at most two lines of summary. No long
+   explanations, no extra queries beyond what the prompt asks.
+
+Preparation, now:
+a. List your available skills and tell me the exact names that match these three:
+   data-quality, data-governance, agent-studio. If a name differs, tell me the real one.
+b. Dry-run the three steps once, silently, and tell me only whether each worked:
+   - CALL SUPPLY_CHAIN_FORGE.SEMANTIC.SP_DATA_HEALTH('ALL');
+   - CALL SUPPLY_CHAIN_FORGE.GOVERNED.SP_METRICS_AS_PLANNER(); and the same for _BUYER and _LOGISTICS;
+     then SP_SAMPLE_AS_PLANNER() and SP_SAMPLE_AS_BUYER()
+   - ask the Cortex Agent SUPPLY_CHAIN_FORGE.SEMANTIC.SUPPLY_CHAIN_AGENT, through
+     SNOWFLAKE.CORTEX.DATA_AGENT_RUN as in docs/CONTRACT.md section 5.3 (bind the whole request
+     JSON as one parameter): "List the top 5 suppliers in EMEA with the shortest lead times"
+c. Reply with one line per step (OK, or the exact error), the skill names from (a), and the
+   word READY when everything works.
+```
+
+If CoCo gives different skill names in (a), swap them into the three prompts below before
+recording. Once it says READY, start recording and paste prompt 1.
+
 About 4 minutes 10 seconds in total. Record each scene as its own clip; afterwards put the
 matching voice line under each clip. The scene timings are for the finished, edited video.
 
@@ -102,12 +137,12 @@ Show the agent's answer text, the tools it used, and the SQL it generated on the
 
 **Show**
 - 2:25: Back to the browser. Click **Same for everyone**.
-- 2:30: Hover over the three persona cards: all show **0.875369** and "Matches".
+- 2:30: Hover over the three persona cards: all show the same number and "Matches".
 - 2:38: Hover over "What this team can see" (the ticks and locks differ per team).
 - 2:44: Click the **Fill Rate** card at the top: all three numbers change together and still match.
 
 **Voice**
-> The same proof is in the app. Three teams, three access rules, one number: point eight seven five three six nine for on-time delivery, for everyone.
+> The same proof is in the app. Three teams, three access rules, and one number, identical to six decimal places, for everyone.
 
 ---
 

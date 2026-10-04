@@ -61,6 +61,34 @@
 
 ---
 
+## Session 44 — 2026-10-03/04 — Claude Code (submission)
+
+### Done
+- **README:** the 4 screenshots re-taken from the live link (all light theme, tag "Live"); "19.4" fixed to 19.3;
+  links to the submission files.
+- **Deck:** the hackathon template filled in (`demo/submission/build_deck.py`, rendered and exported with
+  PowerPoint):
+  - title, problem brief, architecture, impact, the working prototype, how it was built, thank you
+  - PDF 0.6 MB
+- **Brief:** `demo/submission/BRIEF.md`, 866 of 1,024 characters.
+- **Video:**
+  - `demo/demo_script.md`, `demo/VIDEO_SHOT_LIST.md` (a CoCo briefing plus 3 prompts) and `demo/VOICE_LINES.txt`
+  - the app scenes recorded from the live link with Playwright (`demo/video/record_app.py`)
+  - the user's 3 CoCo CLI clips trimmed (`cut_coco.py`), then everything assembled with ffmpeg (`assemble.py`):
+    3:26, 1080p
+  - scene 4a's line no longer quotes the exact OTD number (it moved after the nightly append)
+- **Learning guide:** `demo/FIELD_GUIDE.html`, 21 chapters (each component in plain words, plus how to reuse it
+  without Snowflake), published as a private artifact.
+- **Submitted by the user on 4 Oct 2026.**
+
+### Blocked / Open
+- **None for the hackathon.** After judging: suspend the nightly task and the alerts; keep `~/forge-keys` safe.
+
+### Next action (exact)
+- **None. The project is finished.**
+
+---
+
 ## Session 43 — 2026-10-02 — Claude Code (code freeze)
 
 ### Done
